@@ -175,7 +175,7 @@ def render_piano_roll_html(text, label, gap=1):
                 box-shadow:0 18px 40px -20px rgba(0,0,0,.7);margin:14px 0 4px 0;">
       <div style="background:linear-gradient(135deg,#f2a93b,#e08f1f);
                   color:#1a1200;padding:8px 12px;font-family:'JetBrains Mono',monospace;
-                  font-weight:700;font-size:12px;letter-spacing:.04em;">
+                  font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;">
         {label}{trunc_note}
       </div>
       <div style="background:#101013;padding:14px;overflow-x:auto;">
@@ -282,7 +282,8 @@ st.markdown(
     .t2m-label{
       font-family:'JetBrains Mono', monospace;
       font-size:12px;
-      letter-spacing:.06em;
+      letter-spacing:.14em;
+      text-transform:uppercase;
       color:var(--amber);
       margin:2px 0 0 2px;
     }
@@ -364,7 +365,7 @@ with k1:
 with k2:
     scale = st.selectbox("Escala", ["Minor", "Major"], index=0)
 
-label = f"{root} {scale.lower()} - {text}"
+label = f"{root.split('/')[0]} {scale.lower()} - {text}"
 st.markdown(f'<div class="t2m-label">{label}</div>', unsafe_allow_html=True)
 
 with st.expander("Ajustes avanzados"):
