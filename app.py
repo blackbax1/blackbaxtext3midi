@@ -43,6 +43,7 @@ FONT = {
 "!":["00100","00100","00100","00100","00100","00000","00100"],
 "-":["00000","00000","00000","11111","00000","00000","00000"],
 "_":["00000","00000","00000","00000","00000","00000","11111"],
+"#":["01010","01010","11111","01010","11111","01010","01010"],
 }
 
 
@@ -95,10 +96,13 @@ def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100, track_nam
     return out.getvalue()
 
 
-NOTES = ["C", "C#/Db", "D", "D#/Eb", "E", "F", "F#/Gb", "G", "G#/Ab", "A", "A#/Bb", "B"]
+NOTES = ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"]
 
-# Semitone offset from C for each entry in NOTES, in the same order.
-NOTE_SEMITONES = {name: i for i, name in enumerate(NOTES)}
+# Semitone offset from C for each entry in NOTES.
+NOTE_SEMITONES = {
+    "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5,
+    "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11,
+}
 
 
 def note_to_midi(note_name, octave):
@@ -365,7 +369,7 @@ with k1:
 with k2:
     scale = st.selectbox("Escala", ["Minor", "Major"], index=0)
 
-label = f"{root.split('/')[0]} {scale.lower()} - {text}"
+label = f"{root} {scale.lower()} - {text}"
 st.markdown(f'<div class="t2m-label">{label}</div>', unsafe_allow_html=True)
 
 with st.expander("Ajustes avanzados"):
