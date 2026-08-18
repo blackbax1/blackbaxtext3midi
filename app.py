@@ -358,12 +358,16 @@ st.markdown(
 
 text = st.text_input("Texto", value="Blackbax", max_chars=80)
 
+k1, k2 = st.columns(2)
+with k1:
+    root = st.selectbox("Nota", NOTES, index=0)
+with k2:
+    scale = st.selectbox("Escala", ["Minor", "Major"], index=0)
+
+label = f"{root} {scale.lower()} - {text}"
+st.markdown(f'<div class="t2m-label">{label}</div>', unsafe_allow_html=True)
+
 with st.expander("Ajustes avanzados"):
-    k1, k2 = st.columns(2)
-    with k1:
-        root = st.selectbox("Nota", NOTES, index=0)
-    with k2:
-        scale = st.selectbox("Escala", ["Minor", "Major"], index=0)
     c1, c2, c3 = st.columns(3)
     with c1:
         octave = st.slider("Octava", 0, 6, 3, help="Sube o baja la nota elegida arriba una o más octavas.")
@@ -371,9 +375,6 @@ with st.expander("Ajustes avanzados"):
         cell_ticks = st.select_slider("Tamaño", options=[60, 90, 120, 180, 240], value=120)
     with c3:
         gap = st.slider("Espacio", 0, 4, 1)
-
-label = f"{root} {scale.lower()} - {text}"
-st.markdown(f'<div class="t2m-label">{label}</div>', unsafe_allow_html=True)
 
 base_note = note_to_midi(root, octave)
 
