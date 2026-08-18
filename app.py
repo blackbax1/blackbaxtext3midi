@@ -117,7 +117,7 @@ def safe_filename(label):
     return f"{cleaned}.mid"
 
 
-def build_preview_grid(text, gap=1, max_chars=24):
+def build_preview_grid(text, gap=1, max_chars=40):
     """Lay the text out on the same 5x7 grid used by make_midi, for an
     on-screen preview that mirrors the real piano roll exactly."""
     shown = text.upper()[:max_chars]
@@ -379,10 +379,10 @@ with st.expander("Ajustes avanzados"):
 
 base_note = note_to_midi(root, octave)
 
-st.markdown(render_piano_roll_html(text, label, gap=gap), unsafe_allow_html=True)
+st.markdown(render_piano_roll_html(label, label, gap=gap), unsafe_allow_html=True)
 
 if st.button("Generar MIDI", type="primary"):
-    data = make_midi(text, base_note, cell_ticks, gap, track_name=label)
+    data = make_midi(label, base_note, cell_ticks, gap, track_name=label)
     st.success("MIDI generado.")
     st.download_button("⬇️ Descargar MIDI", data=data, file_name=safe_filename(label), mime="audio/midi")
 
