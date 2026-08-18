@@ -150,39 +150,42 @@ def render_piano_roll_html(text, label, gap=1):
     cell = 9  # px
     rows_html = []
     for row in range(7):
-        zebra = "background:rgba(255,255,255,0.028);" if row % 2 == 0 else ""
+        zebra = "background:rgba(255,255,255,0.032);" if row % 2 == 0 else ""
         cells = []
         for x in range(n_cols):
             on = row in cols[x]
             if on:
                 cells.append(
                     f'<span style="width:{cell}px;height:{cell}px;margin:1px;display:inline-block;'
-                    f'background:linear-gradient(180deg,#ffcf7a,#f2a93b);border-radius:2px;'
-                    f'box-shadow:0 0 6px rgba(242,169,59,.65);"></span>'
+                    f'background:linear-gradient(160deg,#c9a3ff,#8b5cf6 45%,#ff4fa3 100%);border-radius:3px;'
+                    f'box-shadow:0 0 7px rgba(139,92,246,.75);"></span>'
                 )
             else:
                 cells.append(
                     f'<span style="width:{cell}px;height:{cell}px;margin:1px;display:inline-block;'
-                    f'border-radius:2px;"></span>'
+                    f'background:rgba(255,255,255,.025);border-radius:3px;"></span>'
                 )
         rows_html.append(
             f'<div style="{zebra}display:flex;line-height:0;">' + "".join(cells) + "</div>"
         )
 
     trunc_note = (
-        '<span style="float:right;opacity:.55;font-size:10px;">preview truncado</span>'
+        '<span style="float:right;opacity:.6;font-size:10px;">preview truncado</span>'
         if truncated else ""
     )
 
     return f"""
-    <div style="border:1px solid #2a2a30;border-radius:14px;overflow:hidden;
-                box-shadow:0 18px 40px -20px rgba(0,0,0,.7);margin:14px 0 4px 0;">
-      <div style="background:linear-gradient(135deg,#f2a93b,#e08f1f);
-                  color:#1a1200;padding:8px 12px;font-family:'JetBrains Mono',monospace;
-                  font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;">
+    <div style="border:1px solid rgba(255,255,255,.09);border-radius:16px;overflow:hidden;
+                box-shadow:0 22px 46px -22px rgba(139,92,246,.5);margin:16px 0 4px 0;">
+      <div style="background:linear-gradient(100deg,#8b5cf6,#ff4fa3 65%,#2be6c4 130%);
+                  color:#0a0710;padding:9px 13px;font-family:'JetBrains Mono',monospace;
+                  font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;">
         {label}{trunc_note}
       </div>
-      <div style="background:#101013;padding:14px;overflow-x:auto;">
+      <div style="position:relative;background:#0a0a0d;padding:14px;overflow-x:auto;">
+        <div style="position:absolute;top:0;left:0;height:100%;width:26px;pointer-events:none;
+                    background:linear-gradient(90deg,rgba(43,230,196,0),rgba(43,230,196,.16),rgba(43,230,196,0));
+                    animation:t2m-scan 5.5s linear infinite;"></div>
         {''.join(rows_html)}
       </div>
     </div>
@@ -194,23 +197,36 @@ st.set_page_config(page_title="Texto → MIDI", page_icon="🎹", layout="center
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
 
     :root{
-      --bg:#0e0e11;
-      --panel:#18181c;
-      --amber:#f2a93b;
-      --amber-glow:rgba(242,169,59,.35);
-      --teal:#3fe1c0;
-      --ink:#eeece7;
-      --muted:#8a8a93;
-      --line:#2a2a30;
+      --bg:#07070a;
+      --panel:rgba(255,255,255,.045);
+      --panel-solid:#131318;
+      --violet:#8b5cf6;
+      --magenta:#ff4fa3;
+      --cyan:#2be6c4;
+      --glow:rgba(139,92,246,.35);
+      --ink:#f3f1fb;
+      --muted:#928fa3;
+      --line:rgba(255,255,255,.09);
+    }
+
+    @keyframes t2m-drift{
+      0%{ background-position:0% 50%; }
+      50%{ background-position:100% 50%; }
+      100%{ background-position:0% 50%; }
+    }
+    @keyframes t2m-scan{
+      0%{ transform:translateX(-8%); }
+      100%{ transform:translateX(108%); }
     }
 
     .stApp{
       background:
-        radial-gradient(1100px 480px at 15% -10%, rgba(242,169,59,.10), transparent 60%),
-        radial-gradient(900px 420px at 100% 0%, rgba(63,225,192,.08), transparent 55%),
+        radial-gradient(900px 460px at 12% -8%, rgba(139,92,246,.22), transparent 60%),
+        radial-gradient(760px 420px at 100% 0%, rgba(43,230,196,.14), transparent 55%),
+        radial-gradient(700px 500px at 90% 90%, rgba(255,79,163,.12), transparent 60%),
         var(--bg);
       color:var(--ink);
     }
@@ -221,34 +237,45 @@ st.markdown(
     }
 
     h1, h2, h3, .stMarkdown h1{
-      font-family:'JetBrains Mono', monospace !important;
+      font-family:'Space Grotesk', sans-serif !important;
       letter-spacing:-.01em;
     }
 
     .t2m-eyebrow{
       font-family:'JetBrains Mono', monospace;
       font-size:11px;
-      letter-spacing:.24em;
+      letter-spacing:.3em;
       text-transform:uppercase;
-      color:var(--teal);
-      margin-bottom:2px;
+      color:var(--cyan);
+      margin-bottom:6px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .t2m-eyebrow::before{
+      content:"";
+      width:6px;height:6px;border-radius:50%;
+      background:var(--magenta);
+      box-shadow:0 0 10px 2px var(--magenta);
     }
     .t2m-title{
-      font-family:'JetBrains Mono', monospace;
+      font-family:'Space Grotesk', sans-serif;
       font-weight:800;
-      font-size:2.1rem;
-      background:linear-gradient(135deg,#fff,#f2a93b 70%);
+      font-size:2.6rem;
+      background:linear-gradient(100deg,#fff 0%,var(--violet) 35%,var(--magenta) 60%,var(--cyan) 100%);
+      background-size:220% 220%;
       -webkit-background-clip:text;
       background-clip:text;
       color:transparent;
-      margin:0 0 6px 0;
-      line-height:1.15;
+      margin:0 0 8px 0;
+      line-height:1.08;
+      animation:t2m-drift 9s ease-in-out infinite;
     }
     .t2m-sub{
       font-family:'Inter', sans-serif;
       color:var(--muted);
-      font-size:.95rem;
-      margin-bottom:1.6rem;
+      font-size:.97rem;
+      margin-bottom:1.8rem;
     }
 
     label, .stMarkdown, p, span, div{
@@ -257,27 +284,29 @@ st.markdown(
 
     .stTextInput > div > div > input{
       background:var(--panel) !important;
+      backdrop-filter:blur(10px);
       color:var(--ink) !important;
       border:1px solid var(--line) !important;
-      border-radius:10px !important;
+      border-radius:12px !important;
       font-family:'JetBrains Mono', monospace !important;
       letter-spacing:.02em;
     }
     .stTextInput > div > div > input:focus{
-      border-color:var(--amber) !important;
-      box-shadow:0 0 0 1px var(--amber) !important;
+      border-color:var(--violet) !important;
+      box-shadow:0 0 0 3px var(--glow) !important;
     }
 
     div[data-baseweb="select"] > div{
       background:var(--panel) !important;
+      backdrop-filter:blur(10px);
       border:1px solid var(--line) !important;
-      border-radius:10px !important;
+      border-radius:12px !important;
       color:var(--ink) !important;
     }
 
     .stSlider [data-baseweb="slider"] div[role="slider"]{
-      background-color:var(--amber) !important;
-      box-shadow:0 0 0 4px var(--amber-glow) !important;
+      background:linear-gradient(135deg,var(--violet),var(--magenta)) !important;
+      box-shadow:0 0 0 5px var(--glow) !important;
     }
     .stSlider [data-testid="stTickBarMin"], .stSlider [data-testid="stTickBarMax"]{
       color:var(--muted) !important;
@@ -286,68 +315,88 @@ st.markdown(
     .t2m-label{
       font-family:'JetBrains Mono', monospace;
       font-size:12px;
-      letter-spacing:.14em;
+      letter-spacing:.16em;
       text-transform:uppercase;
-      color:var(--amber);
-      margin:2px 0 0 2px;
+      background:linear-gradient(90deg,var(--violet),var(--cyan));
+      -webkit-background-clip:text;
+      background-clip:text;
+      color:transparent;
+      margin:4px 0 0 2px;
+      font-weight:600;
     }
 
     .t2m-footer{
       text-align:center;
-      margin-top:2.4rem;
+      margin-top:2.6rem;
       font-family:'Inter', sans-serif;
       font-size:12px;
       color:var(--muted);
     }
     .t2m-footer a{
-      color:var(--amber);
+      color:var(--cyan);
       text-decoration:none;
+      font-weight:600;
     }
     .t2m-footer a:hover{ text-decoration:underline; }
 
     .stButton > button{
-      background:linear-gradient(135deg,var(--amber),#ffcf7a) !important;
-      color:#1a1200 !important;
+      background:linear-gradient(135deg,var(--violet),var(--magenta)) !important;
+      color:#fff !important;
       border:none !important;
       border-radius:999px !important;
       font-family:'JetBrains Mono', monospace !important;
       font-weight:700 !important;
-      letter-spacing:.06em;
+      letter-spacing:.08em;
       text-transform:uppercase;
       font-size:13px !important;
-      padding:.55rem 1.5rem !important;
-      box-shadow:0 10px 26px -8px var(--amber-glow) !important;
-      transition:transform .12s ease;
+      padding:.6rem 1.6rem !important;
+      box-shadow:0 12px 30px -10px var(--glow) !important;
+      transition:transform .15s ease, box-shadow .15s ease;
     }
-    .stButton > button:hover{ transform:translateY(-1px); }
+    .stButton > button:hover{
+      transform:translateY(-2px);
+      box-shadow:0 16px 34px -8px rgba(255,79,163,.45) !important;
+    }
 
     .stDownloadButton > button{
-      background:linear-gradient(135deg,var(--teal),#8ff5e3) !important;
-      color:#052620 !important;
+      background:linear-gradient(135deg,var(--cyan),#7cf5db) !important;
+      color:#053228 !important;
       border:none !important;
       border-radius:999px !important;
       font-family:'JetBrains Mono', monospace !important;
       font-weight:700 !important;
-      letter-spacing:.06em;
+      letter-spacing:.08em;
       text-transform:uppercase;
       font-size:13px !important;
-      padding:.55rem 1.5rem !important;
-      box-shadow:0 10px 26px -8px rgba(63,225,192,.35) !important;
+      padding:.6rem 1.6rem !important;
+      box-shadow:0 12px 30px -10px rgba(43,230,196,.45) !important;
+      transition:transform .15s ease;
     }
+    .stDownloadButton > button:hover{ transform:translateY(-2px); }
 
     .streamlit-expanderHeader{
       font-family:'JetBrains Mono', monospace !important;
       font-size:12px !important;
-      letter-spacing:.08em;
+      letter-spacing:.1em;
       text-transform:uppercase;
       color:var(--muted) !important;
     }
+    div[data-testid="stExpander"]{
+      background:var(--panel) !important;
+      backdrop-filter:blur(10px);
+      border:1px solid var(--line) !important;
+      border-radius:14px !important;
+    }
 
     div[data-testid="stAlert"]{
-      background:rgba(63,225,192,.08) !important;
-      border:1px solid rgba(63,225,192,.35) !important;
-      border-radius:10px !important;
+      background:rgba(43,230,196,.08) !important;
+      border:1px solid rgba(43,230,196,.35) !important;
+      border-radius:12px !important;
       color:var(--ink) !important;
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      .t2m-title{ animation:none; }
     }
     </style>
     """,
