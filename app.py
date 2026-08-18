@@ -45,11 +45,11 @@ FONT = {
 "_":["00000","00000","00000","00000","00000","00000","11111"],
 }
 
-def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100):
+def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100, track_name="TEXT2MIDI"):
     mid = mido.MidiFile(ticks_per_beat=480)
     track = mido.MidiTrack()
     mid.tracks.append(track)
-    track.append(mido.MetaMessage("track_name", name="TEXT2MIDI"))
+    track.append(mido.MetaMessage("track_name", name=track_name))
     track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120)))
 
     x = 0
@@ -94,11 +94,35 @@ def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100):
     mid.save(file=out)
     return out.getvalue()
 
+NOTES = ["C", "C#/Db", "D", "D#/Eb", "E", "F", "F#/Gb", "G", "G#/Ab", "A", "A#/Bb", "B"]
+
+
+def safe_filename(label):
+    # Turn "C minor - Blackbax" into a filesystem-safe "C_minor_-_Blackbax.mid"
+    keep = []
+    for c in label:
+        if c.isalnum() or c in " -_#":
+            keep.append(c)
+    cleaned = "".join(keep).strip()
+    cleaned = cleaned.replace("#", "s").replace(" ", "_")
+    return f"{cleaned}.mid"
+
+
 st.set_page_config(page_title="Text → MIDI", page_icon="🎹")
 st.title("🎹 Text → MIDI")
 st.write("Escribe texto y genera un MIDI que dibuja las letras en el piano roll de Ableton.")
 
-text = st.text_input("Texto", value="BLACKBAX", max_chars=80)
+text = st.text_input("Texto", value="Blackbax", max_chars=80)
+
+k1, k2 = st.columns(2)
+with k1:
+    root = st.selectbox("Nota", NOTES, index=0)
+with k2:
+    scale = st.selectbox("Escala", ["Minor", "Major"], index=0)
+
+label = f"{root} {scale.lower()} - {text}"
+st.caption(f"**{label}**")
+
 c1, c2, c3 = st.columns(3)
 with c1:
     base_note = st.slider("Nota base", 24, 84, 48)
@@ -108,6 +132,6 @@ with c3:
     gap = st.slider("Espacio", 0, 4, 1)
 
 if st.button("Generar MIDI", type="primary"):
-    data = make_midi(text, base_note, cell_ticks, gap)
+    data = make_midi(text, base_note, cell_ticks, gap, track_name=label)
     st.success("MIDI generado.")
-    st.download_button("⬇️ Descargar MIDI", data=data, file_name="texto.mid", mime="audio/midi")
+    st.download_button("⬇️ Descargar MIDI", data=data, file_name=safe_filename(label), mime="audio/midi")
