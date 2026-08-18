@@ -175,7 +175,7 @@ def render_piano_roll_html(text, label, gap=1):
                 box-shadow:0 18px 40px -20px rgba(0,0,0,.7);margin:14px 0 4px 0;">
       <div style="background:linear-gradient(135deg,#f2a93b,#e08f1f);
                   color:#1a1200;padding:8px 12px;font-family:'JetBrains Mono',monospace;
-                  font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;">
+                  font-weight:700;font-size:12px;letter-spacing:.04em;">
         {label}{trunc_note}
       </div>
       <div style="background:#101013;padding:14px;overflow-x:auto;">
@@ -282,11 +282,23 @@ st.markdown(
     .t2m-label{
       font-family:'JetBrains Mono', monospace;
       font-size:12px;
-      letter-spacing:.14em;
-      text-transform:uppercase;
+      letter-spacing:.06em;
       color:var(--amber);
       margin:2px 0 0 2px;
     }
+
+    .t2m-footer{
+      text-align:center;
+      margin-top:2.4rem;
+      font-family:'Inter', sans-serif;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .t2m-footer a{
+      color:var(--amber);
+      text-decoration:none;
+    }
+    .t2m-footer a:hover{ text-decoration:underline; }
 
     .stButton > button{
       background:linear-gradient(135deg,var(--amber),#ffcf7a) !important;
@@ -340,22 +352,18 @@ st.markdown(
 st.markdown('<div class="t2m-eyebrow">Studio tool — piano roll art</div>', unsafe_allow_html=True)
 st.markdown('<div class="t2m-title">Texto → MIDI</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="t2m-sub">Escribe texto y genera un MIDI que dibuja las letras en el piano roll de Ableton.</div>',
+    '<div class="t2m-sub">Escribe texto y genera un MIDI que dibuja las letras en el piano roll.</div>',
     unsafe_allow_html=True,
 )
 
 text = st.text_input("Texto", value="Blackbax", max_chars=80)
 
-k1, k2 = st.columns(2)
-with k1:
-    root = st.selectbox("Nota", NOTES, index=0)
-with k2:
-    scale = st.selectbox("Escala", ["Minor", "Major"], index=0)
-
-label = f"{root} {scale.lower()} - {text}"
-st.markdown(f'<div class="t2m-label">{label}</div>', unsafe_allow_html=True)
-
 with st.expander("Ajustes avanzados"):
+    k1, k2 = st.columns(2)
+    with k1:
+        root = st.selectbox("Nota", NOTES, index=0)
+    with k2:
+        scale = st.selectbox("Escala", ["Minor", "Major"], index=0)
     c1, c2, c3 = st.columns(3)
     with c1:
         octave = st.slider("Octava", 0, 6, 3, help="Sube o baja la nota elegida arriba una o más octavas.")
@@ -363,6 +371,9 @@ with st.expander("Ajustes avanzados"):
         cell_ticks = st.select_slider("Tamaño", options=[60, 90, 120, 180, 240], value=120)
     with c3:
         gap = st.slider("Espacio", 0, 4, 1)
+
+label = f"{root} {scale.lower()} - {text}"
+st.markdown(f'<div class="t2m-label">{label}</div>', unsafe_allow_html=True)
 
 base_note = note_to_midi(root, octave)
 
@@ -372,3 +383,10 @@ if st.button("Generar MIDI", type="primary"):
     data = make_midi(text, base_note, cell_ticks, gap, track_name=label)
     st.success("MIDI generado.")
     st.download_button("⬇️ Descargar MIDI", data=data, file_name=safe_filename(label), mime="audio/midi")
+
+st.markdown(
+    '<div class="t2m-footer">Creado por '
+    '<a href="https://www.instagram.com/blackbaxbeats/" target="_blank">@blackbaxbeats</a>'
+    '</div>',
+    unsafe_allow_html=True,
+)
