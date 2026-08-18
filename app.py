@@ -1,4 +1,3 @@
-
 import io
 import streamlit as st
 import mido
@@ -54,7 +53,7 @@ def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100):
     track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120)))
 
     x = 0
-    events = []
+    starts = []  # (start_tick, note)
     for ch in text.upper():
         if ch == " ":
             x += 6 + gap
@@ -66,16 +65,29 @@ def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100):
                     # Row 0 is the highest pitch so the glyph is upright in piano roll.
                     note = base_note + (6 - row)
                     start = (x + col) * cell_ticks
-                    events.append((start, note))
+                    starts.append((start, note))
         x += 5 + gap
 
-    events.sort()
-    last = 0
-    for start, note in events:
-        delta = max(0, start - last)
-        track.append(mido.Message("note_on", note=note, velocity=velocity, time=delta))
-        track.append(mido.Message("note_off", note=note, velocity=0, time=cell_ticks))
-        last = start + cell_ticks
+    # Build every note_on / note_off as an ABSOLUTE-time event first, so that
+    # all the notes belonging to the same column (a vertical stroke of a
+    # letter) share the exact same tick instead of being serialized one
+    # after another. This is what keeps the letters looking even/aligned.
+    abs_events = []
+    for start, note in starts:
+        abs_events.append((start, 1, note))               # note_on  (type 1)
+        abs_events.append((start + cell_ticks, 0, note))   # note_off (type 0, sorts before a note_on at the same tick)
+
+    # Sort by absolute tick; at equal ticks, note_off before note_on.
+    abs_events.sort(key=lambda e: (e[0], e[1]))
+
+    last_tick = 0
+    for tick, kind, note in abs_events:
+        delta = max(0, tick - last_tick)
+        if kind == 1:
+            track.append(mido.Message("note_on", note=note, velocity=velocity, time=delta))
+        else:
+            track.append(mido.Message("note_off", note=note, velocity=0, time=delta))
+        last_tick = tick
 
     track.append(mido.MetaMessage("end_of_track", time=0))
     out = io.BytesIO()
