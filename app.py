@@ -47,14 +47,14 @@ FONT = {
 }
 
 
-def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100, track_name="TEXT2MIDI"):
+def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100, track_name="TEXT2MIDI", lead_in_cells=4):
     mid = mido.MidiFile(ticks_per_beat=480)
     track = mido.MidiTrack()
     mid.tracks.append(track)
     track.append(mido.MetaMessage("track_name", name=track_name))
     track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120)))
 
-    x = 0
+    x = lead_in_cells
     starts = []  # (start_tick, note)
     for ch in text.upper():
         if ch == " ":
@@ -373,20 +373,22 @@ label = f"{root} {scale.lower()} - {text}"
 st.markdown(f'<div class="t2m-label">{label}</div>', unsafe_allow_html=True)
 
 with st.expander("Ajustes avanzados"):
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         octave = st.slider("Octava", 0, 6, 3, help="Sube o baja la nota elegida arriba una o más octavas.")
     with c2:
         cell_ticks = st.select_slider("Tamaño", options=[60, 90, 120, 180, 240], value=120)
     with c3:
         gap = st.slider("Espacio", 0, 4, 1)
+    with c4:
+        lead_in = st.slider("Inicio", 0, 16, 4, help="Corre el dibujo más adelante en la línea de tiempo, para que no quede pegado al compás 1.")
 
 base_note = note_to_midi(root, octave)
 
 st.markdown(render_piano_roll_html(label, label, gap=gap), unsafe_allow_html=True)
 
 if st.button("Generar MIDI", type="primary"):
-    data = make_midi(label, base_note, cell_ticks, gap, track_name=label)
+    data = make_midi(label, base_note, cell_ticks, gap, track_name=label, lead_in_cells=lead_in)
     st.success("MIDI generado.")
     st.download_button("⬇️ Descargar MIDI", data=data, file_name=safe_filename(label), mime="audio/midi")
 
