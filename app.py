@@ -123,7 +123,7 @@ def layout_cells(text, weight="Tiny", density="Dense", width="Narrow", gap=1):
 
 
 def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100, track_name="TEXT2MIDI", lead_in_cells=4,
-              weight="Tiny", density="Dense", width="Narrow"):
+              weight="Tiny", density="Dense", width="Narrow", lead_out_cells=None):
     mid = mido.MidiFile(ticks_per_beat=480)
     track = mido.MidiTrack()
     mid.tracks.append(track)
@@ -169,13 +169,34 @@ def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100, track_nam
         abs_events.append((start, 1, note))   # note_on  (type 1)
         abs_events.append((end, 0, note))     # note_off (type 0, sorts before a note_on at the same tick)
 
+    # Mirror the front "Inicio" gap at the tail end so the last letter isn't
+    # flush against the end of the clip. Parking that extra length only in
+    # the end-of-track meta timestamp isn't reliable enough -- several DAWs
+    # (Ableton included) size an imported MIDI clip off the position of the
+    # LAST REAL NOTE EVENT and silently ignore any tail that only lives in
+    # that meta event. So this adds an actual marker note instead: parked
+    # four-plus octaves below anything a letter can use and at the
+    # quietest possible velocity, ending right at the padding's edge. It's
+    # a real event, so every importer counts it toward the clip length, and
+    # it's far enough below the artwork that it won't show up mixed in with
+    # the letters in the piano roll.
+    MARKER_NOTE = 0
+    if lead_out_cells is None:
+        lead_out_cells = lead_in_cells
+    last_content_tick = max((t for t, _, _ in abs_events), default=0)
+    tail_tick = last_content_tick + max(0, lead_out_cells) * cell_ticks
+    if tail_tick > last_content_tick:
+        abs_events.append((max(last_content_tick, tail_tick - 1), 1, MARKER_NOTE))
+        abs_events.append((tail_tick, 0, MARKER_NOTE))
+
     abs_events.sort(key=lambda e: (e[0], e[1]))
 
     last_tick = 0
     for tick, kind, note in abs_events:
         delta = max(0, tick - last_tick)
         if kind == 1:
-            track.append(mido.Message("note_on", note=note, velocity=velocity, time=delta))
+            note_velocity = 1 if note == MARKER_NOTE else velocity
+            track.append(mido.Message("note_on", note=note, velocity=note_velocity, time=delta))
         else:
             track.append(mido.Message("note_off", note=note, velocity=0, time=delta))
         last_tick = tick
@@ -798,7 +819,7 @@ def style_and_preview_section(text, root, scale, label):
     )
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        octave = st.slider("Octava", 0, 6, 3, help="Sube o baja la nota elegida arriba una o más octavas.")
+        octave = st.slider("Octava", 0, 6, 1, help="Sube o baja la nota elegida arriba una o más octavas.")
     with c2:
         # ableset's MIDI Typer holds each column for a full quarter note
         # (1 beat) — that's the real reason its letters read as "big" even
@@ -822,7 +843,7 @@ def style_and_preview_section(text, root, scale, label):
     # Pick up the weight/density the JS widget last wrote to the URL. Falls
     # back to session_state (last known good value) and finally to the
     # original defaults, so a first-ever load or a sync hiccup never
-    # crashes — it just uses "Fino"/"Denso" like before.
+    # crashes — it just uses "Grueso"/"Denso" like before.
     qp = st.query_params
     qs_weight = qp.get("t2mw")
     qs_density = qp.get("t2md")
@@ -830,7 +851,7 @@ def style_and_preview_section(text, root, scale, label):
         st.session_state["grosor"] = qs_weight
     if qs_density in DENSITY_ROW_STEP:
         st.session_state["densidad"] = qs_density
-    ctrl_weight = st.session_state.get("grosor", "Tiny")
+    ctrl_weight = st.session_state.get("grosor", "Bold")
     ctrl_density = st.session_state.get("densidad", "Dense")
     ctrl_width = "Narrow"  # "Ancho" selector removed; width stays fixed.
 
@@ -843,14 +864,13 @@ def style_and_preview_section(text, root, scale, label):
         )
         st.success("MIDI generado.")
 
-        # Auto-download: trigger the save immediately instead of making the
-        # user click a second "Descargar" button. Streamlit has no native
-        # "download without a click" primitive, so this injects a tiny
-        # invisible component that builds the file as a data: URI and
-        # .click()s a hidden <a download> once on load — the standard,
-        # widely-supported way to force a save from JS. The visible
-        # download button stays right below as a manual fallback, in case
-        # a browser's popup/download blocker stops the automatic one.
+        # "Generar MIDI" hace las dos cosas en un solo clic: genera el
+        # archivo y dispara la descarga al toque, sin un segundo botón de
+        # "Descargar". Streamlit no tiene un primitivo nativo para "guardar
+        # sin clic", así que esto inyecta un componente invisible que arma
+        # el archivo como data: URI y le hace .click() a un <a download>
+        # oculto apenas carga -- la forma estándar de forzar el guardado
+        # desde JS.
         b64 = base64.b64encode(data).decode("ascii")
         fname = safe_filename(label)
         components.html(
@@ -860,8 +880,6 @@ def style_and_preview_section(text, root, scale, label):
             """,
             height=0,
         )
-
-        st.download_button("⬇️ Descargar MIDI de nuevo", data=data, file_name=fname, mime="audio/midi")
 
 
 style_and_preview_section(text, root, scale, label)
