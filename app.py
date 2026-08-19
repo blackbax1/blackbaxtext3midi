@@ -483,10 +483,12 @@ st.markdown(
     }
     div[class*="st-key-segbar_"] button{
       font-family:'JetBrains Mono', monospace !important;
-      font-size:15px !important;
-      letter-spacing:.04em;
-      padding:.55rem 1.3rem !important;
+      font-size:12px !important;
+      letter-spacing:.02em;
+      padding:.5rem .55rem !important;
       width:100% !important;
+      white-space:nowrap !important;
+      overflow:visible !important;
       background:transparent !important;
       border:none !important;
       border-left:1px solid var(--line) !important;
