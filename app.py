@@ -51,11 +51,15 @@ FONT = {
 # --- Style controls: weight (stroke thickness), density (row spacing),
 # width (column spacing). "Tiny" / "Dense" / "Narrow" reproduce the
 # original 1px-per-cell look exactly, so the default look never changes.
-WEIGHT_OFFSETS = {
-    "Tiny": [],
-    "Regular": [(0, 1), (1, 0)],
-    "Bold": [(0, 1), (1, 0), (1, 1)],
-}
+#
+# "weight" used to just sprinkle a couple of extra pixels around each dot
+# (a thin +1px outline) -- that's why even "Bold" still looked small next
+# to a tool like ableset's MIDI Typer. Now it's a real integer SCALE:
+# every "on" pixel of the 5x7 font is blown up into an NxN solid block of
+# grid cells (both in pitch/row and in time/col), so Bold letters end up
+# both taller (more semitones tall in the piano roll) and thicker-stroked
+# -- not just outlined.
+WEIGHT_SCALE = {"Tiny": 1, "Regular": 2, "Bold": 4}
 DENSITY_ROW_STEP = {"Dense": 1, "Loose": 2}
 WIDTH_COL_STEP = {"Narrow": 1, "Medium": 2, "Wide": 3, "Very Wide": 4}
 
@@ -66,15 +70,16 @@ def _layout_cells_uncached(text, weight="Tiny", density="Dense", width="Narrow",
     real MIDI) and the on-screen preview, so they always match exactly."""
     row_step = DENSITY_ROW_STEP.get(density, 1)
     col_step = WIDTH_COL_STEP.get(width, 1)
-    dilate = WEIGHT_OFFSETS.get(weight, [])
+    scale = WEIGHT_SCALE.get(weight, 1)
+    scaled_gap = gap * scale
 
     cells = set()
     x = 0
     max_row = 0
-    space_width = 6 * col_step
+    space_width = 6 * col_step * scale
     for ch in text.upper():
         if ch == " ":
-            x += space_width + gap
+            x += space_width + scaled_gap
             continue
         glyph = FONT.get(ch, FONT["-"])
         glyph_cells = set()
@@ -82,17 +87,17 @@ def _layout_cells_uncached(text, weight="Tiny", density="Dense", width="Narrow",
             for col, bit in enumerate(bits):
                 if bit != "1":
                     continue
-                sr, sc = row * row_step, col * col_step
-                glyph_cells.add((sr, sc))
-                for dr, dc in dilate:
-                    glyph_cells.add((sr + dr, sc + dc))
-        glyph_w = (max(c for _, c in glyph_cells) + 1) if glyph_cells else 5 * col_step
+                sr, sc = row * row_step * scale, col * col_step * scale
+                for dr in range(scale):
+                    for dc in range(scale):
+                        glyph_cells.add((sr + dr, sc + dc))
+        glyph_w = (max(c for _, c in glyph_cells) + 1) if glyph_cells else 5 * col_step * scale
         for sr, sc in glyph_cells:
             cells.add((x + sc, sr))
             max_row = max(max_row, sr)
-        x += glyph_w + gap
+        x += glyph_w + scaled_gap
 
-    total_cols = max(x - gap, 0)
+    total_cols = max(x - scaled_gap, 0)
     return cells, total_cols, max_row
 
 
@@ -562,7 +567,7 @@ _STYLE_WIDGET_TEMPLATE = r"""
 <script>
 (function(){
   const FONT = __FONT_JSON__;
-  const WEIGHT_OFFSETS = {"Tiny": [], "Regular": [[0,1],[1,0]], "Bold": [[0,1],[1,0],[1,1]]};
+  const WEIGHT_SCALE = {"Tiny": 1, "Regular": 2, "Bold": 4};
   const DENSITY_ROW_STEP = {"Dense": 1, "Loose": 2};
   const WEIGHT_OPTIONS = [["Tiny","Fino"], ["Regular","Regular"], ["Bold","Grueso"]];
   const DENSITY_OPTIONS = [["Loose","Suelto"], ["Dense","Denso"]];
@@ -574,25 +579,29 @@ _STYLE_WIDGET_TEMPLATE = r"""
 
   function layoutCells(text, weight, density, gap){
     const rowStep = DENSITY_ROW_STEP[density] || 1;
-    const dilate = WEIGHT_OFFSETS[weight] || [];
+    const scale = WEIGHT_SCALE[weight] || 1;
+    const scaledGap = gap * scale;
     const cells = new Set();
     let x = 0, maxRow = 0;
-    const spaceWidth = 6;
+    const spaceWidth = 6 * scale;
     const upper = text.toUpperCase();
     for (const ch of upper) {
-      if (ch === " ") { x += spaceWidth + gap; continue; }
+      if (ch === " ") { x += spaceWidth + scaledGap; continue; }
       const glyph = FONT[ch] || FONT["-"];
       const glyphCells = new Set();
       for (let row = 0; row < glyph.length; row++) {
         const bits = glyph[row];
         for (let col = 0; col < bits.length; col++) {
           if (bits[col] !== "1") continue;
-          const sr = row * rowStep, sc = col;
-          glyphCells.add(sr + "," + sc);
-          for (const off of dilate) glyphCells.add((sr+off[0]) + "," + (sc+off[1]));
+          const sr = row * rowStep * scale, sc = col * scale;
+          for (let dr = 0; dr < scale; dr++) {
+            for (let dc = 0; dc < scale; dc++) {
+              glyphCells.add((sr+dr) + "," + (sc+dc));
+            }
+          }
         }
       }
-      let glyphW = 5;
+      let glyphW = 5 * scale;
       if (glyphCells.size > 0) {
         let maxC = -Infinity;
         glyphCells.forEach(function(key){
@@ -607,9 +616,9 @@ _STYLE_WIDGET_TEMPLATE = r"""
         cells.add((x+sc) + "," + sr);
         if (sr > maxRow) maxRow = sr;
       });
-      x += glyphW + gap;
+      x += glyphW + scaledGap;
     }
-    return {cells: cells, totalCols: Math.max(x - gap, 0), maxRow: maxRow};
+    return {cells: cells, totalCols: Math.max(x - scaledGap, 0), maxRow: maxRow};
   }
 
   function buildGrid(text, weight, density, gap){
@@ -765,7 +774,7 @@ def style_and_preview_section(text, root, scale, label):
     qp = st.query_params
     qs_weight = qp.get("t2mw")
     qs_density = qp.get("t2md")
-    if qs_weight in WEIGHT_OFFSETS:
+    if qs_weight in WEIGHT_SCALE:
         st.session_state["grosor"] = qs_weight
     if qs_density in DENSITY_ROW_STEP:
         st.session_state["densidad"] = qs_density
