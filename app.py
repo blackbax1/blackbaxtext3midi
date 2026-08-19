@@ -119,21 +119,43 @@ def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100, track_nam
     track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120)))
 
     cells, total_cols, max_row = layout_cells(text, weight=weight, density=density, width=width, gap=gap)
-    starts = []  # (start_tick, note)
+
+    # Group "on" cells by row (= by MIDI note), then merge horizontally
+    # consecutive columns into single runs. Emitting one note per cell used
+    # to retrigger the SAME pitch at every column boundary inside a stroke
+    # (note_off + note_on back-to-back), which is exactly what shows up in
+    # the piano roll as a row of little separate squares instead of one
+    # solid bar. Merging each run into a single long note is what makes a
+    # horizontal stroke render as one continuous block, matching the
+    # reference tool.
+    cols_by_row = {}
     for col, row in cells:
+        cols_by_row.setdefault(row, set()).add(col)
+
+    runs = []  # (start_col, end_col_inclusive, note)
+    for row, cols in cols_by_row.items():
         # Row 0 is the highest pitch so the glyph is upright in piano roll.
         note = base_note + (max_row - row)
-        start = (lead_in_cells + col) * cell_ticks
-        starts.append((start, note))
+        cols_sorted = sorted(cols)
+        run_start = prev = cols_sorted[0]
+        for c in cols_sorted[1:]:
+            if c == prev + 1:
+                prev = c
+                continue
+            runs.append((run_start, prev, note))
+            run_start = prev = c
+        runs.append((run_start, prev, note))
 
     # Build every note_on / note_off as an ABSOLUTE-time event first, so that
     # all the notes belonging to the same column (a vertical stroke of a
     # letter) share the exact same tick instead of being serialized one
     # after another. This is what keeps the letters looking even/aligned.
     abs_events = []
-    for start, note in starts:
-        abs_events.append((start, 1, note))               # note_on  (type 1)
-        abs_events.append((start + cell_ticks, 0, note))   # note_off (type 0, sorts before a note_on at the same tick)
+    for start_col, end_col, note in runs:
+        start = (lead_in_cells + start_col) * cell_ticks
+        end = (lead_in_cells + end_col + 1) * cell_ticks
+        abs_events.append((start, 1, note))   # note_on  (type 1)
+        abs_events.append((end, 0, note))     # note_off (type 0, sorts before a note_on at the same tick)
 
     abs_events.sort(key=lambda e: (e[0], e[1]))
 
