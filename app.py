@@ -476,23 +476,10 @@ st.markdown(
       margin:1.1rem 0 .5rem 0;
     }
 
-    /* Center the segmented-control / radio pill rows and make the text a
-       touch larger for a more polished, professional feel. Streamlit wraps
-       every widget in its own full-width container, so we center THAT
-       container (not just the inner flex row) — covers both old and new
-       Streamlit DOM naming. */
-    div[data-testid="stElementContainer"]:has(> div[data-testid="stSegmentedControl"]),
-    .element-container:has(> div[data-testid="stSegmentedControl"]),
-    div[data-testid="stElementContainer"]:has(> div[role="radiogroup"]),
-    .element-container:has(> div[role="radiogroup"]){
-      display:flex !important;
-      justify-content:center !important;
-      width:100% !important;
-    }
+    /* Pill-style buttons for the native segmented control. */
     div[data-testid="stSegmentedControl"]{
       display:flex;
       justify-content:center;
-      margin:0 auto .9rem auto;
     }
     div[data-testid="stSegmentedControl"] button{
       font-family:'JetBrains Mono', monospace !important;
@@ -543,14 +530,24 @@ def style_picker(label_text, options, default_internal):
     return internal_by_label[picked]
 
 
-st.markdown('<div class="t2m-ctrl-label">Grosor</div>', unsafe_allow_html=True)
-ctrl_weight = style_picker("Grosor", [("Tiny", "Fino"), ("Regular", "Regular"), ("Bold", "Grueso")], "Tiny")
+def centered_style_picker(heading, label_text, options, default_internal):
+    """Renders the heading + pill selector inside a real (centered) Streamlit
+    column, so the row is actually centered on the page regardless of the
+    installed Streamlit version's internal HTML — no CSS guesswork needed."""
+    _, mid, _ = st.columns([1, 6, 1])
+    with mid:
+        st.markdown(f'<div class="t2m-ctrl-label">{heading}</div>', unsafe_allow_html=True)
+        return style_picker(label_text, options, default_internal)
 
-st.markdown('<div class="t2m-ctrl-label">Densidad</div>', unsafe_allow_html=True)
-ctrl_density = style_picker("Densidad", [("Loose", "Suelto"), ("Dense", "Denso")], "Dense")
 
-st.markdown('<div class="t2m-ctrl-label">Ancho</div>', unsafe_allow_html=True)
-ctrl_width = style_picker(
+ctrl_weight = centered_style_picker(
+    "Grosor", "Grosor", [("Tiny", "Fino"), ("Regular", "Regular"), ("Bold", "Grueso")], "Tiny"
+)
+ctrl_density = centered_style_picker(
+    "Densidad", "Densidad", [("Loose", "Suelto"), ("Dense", "Denso")], "Dense"
+)
+ctrl_width = centered_style_picker(
+    "Ancho",
     "Ancho",
     [("Narrow", "Angosto"), ("Medium", "Medio"), ("Wide", "Ancho"), ("Very Wide", "Muy ancho")],
     "Narrow",
