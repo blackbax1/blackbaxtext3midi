@@ -694,6 +694,17 @@ _STYLE_WIDGET_TEMPLATE = r"""
   redrawBars();
   renderPreview();
   window.addEventListener('resize', resizeFrame);
+  // The height guess Python passes to components.html() is only a first
+  // paint fallback — these extra calls correct it to the *real* content
+  // height right after load (fonts/layout can still shift a few px after
+  // the first paint), which is what closes the big empty gap before the
+  // "Generar MIDI" button.
+  window.addEventListener('load', resizeFrame);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(resizeFrame);
+  }
+  setTimeout(resizeFrame, 60);
+  setTimeout(resizeFrame, 300);
 })();
 </script>
 """
@@ -708,7 +719,10 @@ def render_style_widget(label, weight, density, gap):
         .replace("__WEIGHT_JSON__", json.dumps(weight))
         .replace("__DENSITY_JSON__", json.dumps(density))
     )
-    components.html(html, height=520, scrolling=False)
+    # height is just the first-paint guess — the JS above corrects it to
+    # the real content height a moment later via postMessage, so this only
+    # needs to be "close enough" to avoid a flash of wrong size.
+    components.html(html, height=380, scrolling=False)
 
 
 # st.fragment (st.experimental_fragment on older Streamlit) lets a block
@@ -724,18 +738,23 @@ if _fragment_decorator is None:
 
 @_fragment_decorator
 def style_and_preview_section(text, root, scale, label):
-    # Advanced settings come first now, so "gap" is known before we build
-    # the style widget below (which needs it for the live preview).
-    with st.expander("Ajustes avanzados"):
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            octave = st.slider("Octava", 0, 6, 3, help="Sube o baja la nota elegida arriba una o más octavas.")
-        with c2:
-            cell_ticks = st.select_slider("Tamaño", options=[60, 90, 120, 180, 240], value=120)
-        with c3:
-            gap = st.slider("Espacio", 0, 4, 1)
-        with c4:
-            lead_in = st.slider("Inicio", 0, 16, 4, help="Corre el dibujo más adelante en la línea de tiempo, para que no quede pegado al compás 1.")
+    # "Ajustes avanzados" ya no es un desplegable — los 4 controles quedan
+    # siempre visibles, en una sola fila.
+    st.markdown(
+        '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;'
+        'letter-spacing:.1em;text-transform:uppercase;color:var(--muted);'
+        'margin:.2rem 0 .3rem 0;">Ajustes avanzados</div>',
+        unsafe_allow_html=True,
+    )
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        octave = st.slider("Octava", 0, 6, 3, help="Sube o baja la nota elegida arriba una o más octavas.")
+    with c2:
+        cell_ticks = st.select_slider("Tamaño", options=[60, 90, 120, 180, 240], value=120)
+    with c3:
+        gap = st.slider("Espacio", 0, 4, 1)
+    with c4:
+        lead_in = st.slider("Inicio", 0, 16, 4, help="Corre el dibujo más adelante en la línea de tiempo, para que no quede pegado al compás 1.")
 
     base_note = note_to_midi(root, octave)
 
