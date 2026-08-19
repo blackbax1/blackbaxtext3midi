@@ -61,6 +61,16 @@ FONT = {
 # both taller (more semitones tall in the piano roll) and thicker-stroked
 # -- not just outlined.
 WEIGHT_SCALE = {"Tiny": 1, "Regular": 2, "Bold": 4}
+
+# Row (pitch) and column (time) used to be blown up by the exact same
+# WEIGHT_SCALE factor, which is why "Bold" already looked nice and thick
+# vertically in the piano roll but its notes still read as short/thin
+# horizontally -- length is what actually reads as "bold" in a MIDI clip.
+# This lets Bold stretch columns extra hard on top of the normal weight
+# scale, without touching how many semitones tall the letter is. Tiny and
+# Regular get 1x here, so their look is completely unchanged.
+WEIGHT_COL_EXTRA = {"Tiny": 1, "Regular": 1, "Bold": 1.5}
+
 DENSITY_ROW_STEP = {"Dense": 1, "Loose": 2}
 WIDTH_COL_STEP = {"Narrow": 1, "Medium": 2, "Wide": 3, "Very Wide": 4}
 
@@ -71,13 +81,14 @@ def _layout_cells_uncached(text, weight="Tiny", density="Dense", width="Narrow",
     real MIDI) and the on-screen preview, so they always match exactly."""
     row_step = DENSITY_ROW_STEP.get(density, 1)
     col_step = WIDTH_COL_STEP.get(width, 1)
-    scale = WEIGHT_SCALE.get(weight, 1)
-    scaled_gap = gap * scale
+    row_scale = WEIGHT_SCALE.get(weight, 1)
+    col_scale = max(1, round(row_scale * WEIGHT_COL_EXTRA.get(weight, 1)))
+    scaled_gap = gap * col_scale
 
     cells = set()
     x = 0
     max_row = 0
-    space_width = 6 * col_step * scale
+    space_width = 6 * col_step * col_scale
     for ch in text.upper():
         if ch == " ":
             x += space_width + scaled_gap
@@ -88,11 +99,11 @@ def _layout_cells_uncached(text, weight="Tiny", density="Dense", width="Narrow",
             for col, bit in enumerate(bits):
                 if bit != "1":
                     continue
-                sr, sc = row * row_step * scale, col * col_step * scale
-                for dr in range(scale):
-                    for dc in range(scale):
+                sr, sc = row * row_step * row_scale, col * col_step * col_scale
+                for dr in range(row_scale):
+                    for dc in range(col_scale):
                         glyph_cells.add((sr + dr, sc + dc))
-        glyph_w = (max(c for _, c in glyph_cells) + 1) if glyph_cells else 5 * col_step * scale
+        glyph_w = (max(c for _, c in glyph_cells) + 1) if glyph_cells else 5 * col_step * col_scale
         for sr, sc in glyph_cells:
             cells.add((x + sc, sr))
             max_row = max(max_row, sr)
