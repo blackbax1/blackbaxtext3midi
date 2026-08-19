@@ -440,7 +440,9 @@ st.markdown(
       flex-wrap:wrap;
       justify-content:center;
       gap:10px;
-      margin-bottom:.9rem;
+      margin:0 auto .9rem auto;
+      width:fit-content;
+      max-width:100%;
     }
     div[role="radiogroup"] label{
       background:var(--panel) !important;
@@ -476,10 +478,14 @@ st.markdown(
       margin:1.1rem 0 .5rem 0;
     }
 
-    /* Pill-style buttons for the native segmented control. */
+    /* Pill-style buttons for the native segmented control. justify-content
+       alone only centers the buttons INSIDE the widget's own box — it does
+       nothing if that box itself is still stuck to the left. width:fit-content
+       + margin:auto centers the box itself within its column. */
     div[data-testid="stSegmentedControl"]{
-      display:flex;
-      justify-content:center;
+      width:fit-content;
+      max-width:100%;
+      margin:0 auto;
     }
     div[data-testid="stSegmentedControl"] button{
       font-family:'JetBrains Mono', monospace !important;
