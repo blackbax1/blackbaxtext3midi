@@ -438,14 +438,16 @@ st.markdown(
     div[role="radiogroup"]{
       display:flex;
       flex-wrap:wrap;
-      gap:8px;
-      margin-bottom:.6rem;
+      justify-content:center;
+      gap:10px;
+      margin-bottom:.9rem;
     }
     div[role="radiogroup"] label{
       background:var(--panel) !important;
       border:1px solid var(--line) !important;
       border-radius:999px !important;
-      padding:.35rem 1rem !important;
+      padding:.5rem 1.3rem !important;
+      font-size:15px !important;
       cursor:pointer;
       transition:border-color .15s ease, background .15s ease;
     }
@@ -457,9 +459,33 @@ st.markdown(
       display:none !important;
     }
 
+    /* Centered heading above each style selector (Grosor / Densidad / Ancho). */
+    .t2m-ctrl-label{
+      font-family:'JetBrains Mono', monospace;
+      font-size:14px;
+      font-weight:600;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      text-align:center;
+      background:linear-gradient(90deg,var(--violet),var(--cyan));
+      -webkit-background-clip:text;
+      background-clip:text;
+      color:transparent;
+      margin:1.1rem 0 .5rem 0;
+    }
+
+    /* Center the segmented-control / radio pill rows and make the text a
+       touch larger for a more polished, professional feel. */
+    div[data-testid="stSegmentedControl"]{
+      display:flex;
+      justify-content:center;
+      margin:0 auto .9rem auto;
+    }
     div[data-testid="stSegmentedControl"] button{
       font-family:'JetBrains Mono', monospace !important;
+      font-size:15px !important;
       letter-spacing:.04em;
+      padding:.55rem 1.3rem !important;
     }
     </style>
     """,
@@ -490,23 +516,32 @@ st.markdown(f'<div class="t2m-label">{label}</div>', unsafe_allow_html=True)
 _has_segmented = hasattr(st, "segmented_control")
 
 
-def style_picker(label_text, options, default):
+def style_picker(label_text, options, default_internal):
+    """options: list of (internal_value, spanish_label). Shows the Spanish
+    label but returns the internal value the rendering code understands."""
+    labels = [lbl for _, lbl in options]
+    internal_by_label = {lbl: internal for internal, lbl in options}
+    default_label = next(lbl for internal, lbl in options if internal == default_internal)
     if _has_segmented:
-        picked = st.segmented_control(
-            label_text, options, default=default, label_visibility="collapsed"
-        )
-        return picked if picked else default
-    return st.radio(label_text, options, index=options.index(default), horizontal=True, label_visibility="collapsed")
+        picked = st.segmented_control(label_text, labels, default=default_label, label_visibility="collapsed")
+        picked = picked if picked else default_label
+    else:
+        picked = st.radio(label_text, labels, index=labels.index(default_label), horizontal=True, label_visibility="collapsed")
+    return internal_by_label[picked]
 
 
-st.markdown('<div class="t2m-label">Grosor</div>', unsafe_allow_html=True)
-ctrl_weight = style_picker("Grosor", ["Tiny", "Regular", "Bold"], "Tiny")
+st.markdown('<div class="t2m-ctrl-label">Grosor</div>', unsafe_allow_html=True)
+ctrl_weight = style_picker("Grosor", [("Tiny", "Fino"), ("Regular", "Regular"), ("Bold", "Grueso")], "Tiny")
 
-st.markdown('<div class="t2m-label">Densidad</div>', unsafe_allow_html=True)
-ctrl_density = style_picker("Densidad", ["Loose", "Dense"], "Dense")
+st.markdown('<div class="t2m-ctrl-label">Densidad</div>', unsafe_allow_html=True)
+ctrl_density = style_picker("Densidad", [("Loose", "Suelto"), ("Dense", "Denso")], "Dense")
 
-st.markdown('<div class="t2m-label">Ancho</div>', unsafe_allow_html=True)
-ctrl_width = style_picker("Ancho", ["Narrow", "Medium", "Wide", "Very Wide"], "Narrow")
+st.markdown('<div class="t2m-ctrl-label">Ancho</div>', unsafe_allow_html=True)
+ctrl_width = style_picker(
+    "Ancho",
+    [("Narrow", "Angosto"), ("Medium", "Medio"), ("Wide", "Ancho"), ("Very Wide", "Muy ancho")],
+    "Narrow",
+)
 
 with st.expander("Ajustes avanzados"):
     c1, c2, c3, c4 = st.columns(4)
