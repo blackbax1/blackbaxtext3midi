@@ -58,7 +58,7 @@ DENSITY_ROW_STEP = {"Dense": 1, "Loose": 2}
 WIDTH_COL_STEP = {"Narrow": 1, "Medium": 2, "Wide": 3, "Very Wide": 4}
 
 
-def layout_cells(text, weight="Tiny", density="Dense", width="Narrow", gap=1):
+def _layout_cells_uncached(text, weight="Tiny", density="Dense", width="Narrow", gap=1):
     """Lay text out on a grid of 'on' (col, row) cells, applying the
     weight/density/width style controls. Shared by make_midi (for the
     real MIDI) and the on-screen preview, so they always match exactly."""
@@ -92,6 +92,15 @@ def layout_cells(text, weight="Tiny", density="Dense", width="Narrow", gap=1):
 
     total_cols = max(x - gap, 0)
     return cells, total_cols, max_row
+
+
+# Cached wrapper: layout_cells is a pure function of its arguments, and it's
+# called on every single rerun (every style-button click re-renders the
+# preview). Caching it means switching between a style you've already seen
+# in this session is instant instead of recomputing the whole glyph grid.
+@st.cache_data(show_spinner=False)
+def layout_cells(text, weight="Tiny", density="Dense", width="Narrow", gap=1):
+    return _layout_cells_uncached(text, weight=weight, density=density, width=width, gap=gap)
 
 
 def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100, track_name="TEXT2MIDI", lead_in_cells=4,
@@ -161,6 +170,7 @@ def safe_filename(label):
     return f"{cleaned}.mid"
 
 
+@st.cache_data(show_spinner=False)
 def build_preview_grid(text, weight="Tiny", density="Dense", width="Narrow", gap=1, max_chars=40):
     """Lay the text out on the same grid used by make_midi, for an
     on-screen preview that mirrors the real piano roll exactly."""
@@ -175,6 +185,7 @@ def build_preview_grid(text, weight="Tiny", density="Dense", width="Narrow", gap
     return cols, truncated, max_row
 
 
+@st.cache_data(show_spinner=False)
 def render_piano_roll_html(text, label, weight="Tiny", density="Dense", width="Narrow", gap=1):
     cols, truncated, max_row = build_preview_grid(text, weight=weight, density=density, width=width, gap=gap)
     n_cols = max(len(cols), 1)
@@ -442,7 +453,7 @@ st.markdown(
       .t2m-title{ animation:none; }
     }
 
-    /* Centered heading above each style selector (Grosor / Densidad / Ancho). */
+    /* Centered heading above each style selector (Grosor / Densidad). */
     .t2m-ctrl-label{
       font-family:'JetBrains Mono', monospace;
       font-size:12px;
@@ -478,22 +489,29 @@ st.markdown(
       background:var(--panel);
       backdrop-filter:blur(10px);
     }
+    /* Columns no longer split the bar into N equal-width slices — each
+       column now shrinks/grows to fit its own button label ("GRUESO"
+       needs more room than "FINO"), so the pill's overall width is the
+       sum of its labels instead of the longest label times N. */
     div[class*="st-key-segbar_"] div[data-testid="stHorizontalBlock"]{
       gap:0 !important;
-      width:100%;
+      width:auto !important;
     }
     div[class*="st-key-segbar_"] div[data-testid="column"]{
       padding:0 !important;
+      flex:0 0 auto !important;
+      width:auto !important;
+      min-width:0 !important;
     }
     div[class*="st-key-segbar_"] div[data-testid="stButton"]{
       margin:0 !important;
-      width:100%;
+      width:auto !important;
     }
     div[class*="st-key-segbar_"] button{
       font-family:'JetBrains Mono', monospace !important;
       font-size:11px !important;
       letter-spacing:.02em;
-      padding:.4rem .45rem !important;
+      padding:.5rem .95rem !important;
       width:100% !important;
       white-space:nowrap !important;
       background:transparent !important;
@@ -503,7 +521,7 @@ st.markdown(
       color:var(--muted) !important;
       box-shadow:none !important;
       transform:none !important;
-      transition:background .15s ease, color .15s ease;
+      transition:background .1s ease, color .1s ease;
     }
     /* On very narrow screens, shrink further rather than clip — the
        button no longer refuses to shrink below its content (no
@@ -511,8 +529,8 @@ st.markdown(
        room, instead of being the thing that causes the clipping. */
     @media (max-width:480px){
       div[class*="st-key-segbar_"] button{
-        font-size:9.5px !important;
-        padding:.35rem .28rem !important;
+        font-size:10px !important;
+        padding:.4rem .55rem !important;
         letter-spacing:0;
       }
     }
@@ -585,7 +603,7 @@ def centered_style_picker(heading, state_key, options, default_internal):
     heading is text-align:center;width:100%, the bar is width:fit-content;
     margin:0 auto), so no wrapping st.columns is needed — which also frees
     up the full page width for the bar instead of squeezing it into a
-    narrower middle column, so long labels like 'Muy ancho' have room."""
+    narrower middle column."""
     st.markdown(f'<div class="t2m-ctrl-label">{heading}</div>', unsafe_allow_html=True)
     return style_picker(state_key, options, default_internal)
 
@@ -611,12 +629,9 @@ def style_and_preview_section(text, root, scale, label):
     ctrl_density = centered_style_picker(
         "Densidad", "densidad", [("Loose", "Suelto"), ("Dense", "Denso")], "Dense"
     )
-    ctrl_width = centered_style_picker(
-        "Ancho",
-        "ancho",
-        [("Narrow", "Angosto"), ("Medium", "Medio"), ("Wide", "Ancho"), ("Very Wide", "Muy ancho")],
-        "Narrow",
-    )
+    # "Ancho" selector removed (kept only Grosor + Densidad, per request).
+    # Width stays fixed at the original "Narrow" spacing.
+    ctrl_width = "Narrow"
 
     with st.expander("Ajustes avanzados"):
         c1, c2, c3, c4 = st.columns(4)
