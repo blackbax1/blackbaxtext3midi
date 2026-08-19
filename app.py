@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import streamlit as st
@@ -788,7 +789,18 @@ def style_and_preview_section(text, root, scale, label):
     with c1:
         octave = st.slider("Octava", 0, 6, 3, help="Sube o baja la nota elegida arriba una o más octavas.")
     with c2:
-        cell_ticks = st.select_slider("Tamaño", options=[60, 90, 120, 180, 240], value=120)
+        # ableset's MIDI Typer holds each column for a full quarter note
+        # (1 beat) — that's the real reason its letters read as "big" even
+        # before you touch weight/density: each cell simply lasts much
+        # longer in musical time. Our ticks_per_beat is 480, so 480 ticks =
+        # 1 beat, matching that. Default is now 480 (1 beat/cell) instead
+        # of the old 120 (a quarter of a beat) so the out-of-the-box result
+        # is already close to ableset's; 960 is offered for an even wider,
+        # slower-reading result.
+        cell_ticks = st.select_slider(
+            "Tamaño", options=[60, 120, 240, 480, 960], value=480,
+            help="Cuánto dura (en tiempo musical) cada columna. 480 = 1 negra por celda, igual que ableset's MIDI Typer.",
+        )
     with c3:
         gap = st.slider("Espacio", 0, 4, 1)
     with c4:
@@ -819,7 +831,26 @@ def style_and_preview_section(text, root, scale, label):
             weight=ctrl_weight, density=ctrl_density, width=ctrl_width,
         )
         st.success("MIDI generado.")
-        st.download_button("⬇️ Descargar MIDI", data=data, file_name=safe_filename(label), mime="audio/midi")
+
+        # Auto-download: trigger the save immediately instead of making the
+        # user click a second "Descargar" button. Streamlit has no native
+        # "download without a click" primitive, so this injects a tiny
+        # invisible component that builds the file as a data: URI and
+        # .click()s a hidden <a download> once on load — the standard,
+        # widely-supported way to force a save from JS. The visible
+        # download button stays right below as a manual fallback, in case
+        # a browser's popup/download blocker stops the automatic one.
+        b64 = base64.b64encode(data).decode("ascii")
+        fname = safe_filename(label)
+        components.html(
+            f"""
+            <a id="t2m-dl" href="data:audio/midi;base64,{b64}" download="{fname}" style="display:none;"></a>
+            <script>document.getElementById('t2m-dl').click();</script>
+            """,
+            height=0,
+        )
+
+        st.download_button("⬇️ Descargar MIDI de nuevo", data=data, file_name=fname, mime="audio/midi")
 
 
 style_and_preview_section(text, root, scale, label)
