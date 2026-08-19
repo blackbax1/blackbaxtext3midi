@@ -484,7 +484,6 @@ st.markdown(
     }
     div[class*="st-key-segbar_"] div[data-testid="column"]{
       padding:0 !important;
-      min-width:0 !important;
     }
     div[class*="st-key-segbar_"] div[data-testid="stButton"]{
       margin:0 !important;
@@ -497,7 +496,6 @@ st.markdown(
       padding:.4rem .45rem !important;
       width:100% !important;
       white-space:nowrap !important;
-      overflow:visible !important;
       background:transparent !important;
       border:none !important;
       border-left:1px solid var(--line) !important;
@@ -506,6 +504,17 @@ st.markdown(
       box-shadow:none !important;
       transform:none !important;
       transition:background .15s ease, color .15s ease;
+    }
+    /* On very narrow screens, shrink further rather than clip — the
+       button no longer refuses to shrink below its content (no
+       min-width:0 above), so this only kicks in if there's truly no
+       room, instead of being the thing that causes the clipping. */
+    @media (max-width:480px){
+      div[class*="st-key-segbar_"] button{
+        font-size:9.5px !important;
+        padding:.35rem .28rem !important;
+        letter-spacing:0;
+      }
     }
     div[class*="st-key-segbar_"] div[data-testid="column"]:first-child button{
       border-left:none !important;
@@ -572,53 +581,71 @@ def style_picker(state_key, options, default_internal):
 
 
 def centered_style_picker(heading, state_key, options, default_internal):
-    """Renders the heading + pill bar inside a real (centered) Streamlit
-    column, so the row is actually centered on the page regardless of the
-    installed Streamlit version's internal HTML — no CSS guesswork needed."""
-    _, mid, _ = st.columns([1, 6, 1])
-    with mid:
-        st.markdown(f'<div class="t2m-ctrl-label">{heading}</div>', unsafe_allow_html=True)
-        return style_picker(state_key, options, default_internal)
+    """Renders the heading + pill bar. Both self-center via CSS (the
+    heading is text-align:center;width:100%, the bar is width:fit-content;
+    margin:0 auto), so no wrapping st.columns is needed — which also frees
+    up the full page width for the bar instead of squeezing it into a
+    narrower middle column, so long labels like 'Muy ancho' have room."""
+    st.markdown(f'<div class="t2m-ctrl-label">{heading}</div>', unsafe_allow_html=True)
+    return style_picker(state_key, options, default_internal)
 
 
-ctrl_weight = centered_style_picker(
-    "Grosor", "grosor", [("Tiny", "Fino"), ("Regular", "Regular"), ("Bold", "Grueso")], "Tiny"
-)
-ctrl_density = centered_style_picker(
-    "Densidad", "densidad", [("Loose", "Suelto"), ("Dense", "Denso")], "Dense"
-)
-ctrl_width = centered_style_picker(
-    "Ancho",
-    "ancho",
-    [("Narrow", "Angosto"), ("Medium", "Medio"), ("Wide", "Ancho"), ("Very Wide", "Muy ancho")],
-    "Narrow",
-)
+# st.fragment (st.experimental_fragment on older Streamlit) lets a block
+# re-run and re-render on its own, without re-running the rest of the
+# script above it (title, text input, note/scale selects...). Wrapping the
+# style pickers + preview + generate/download button in one means clicking
+# a style option only redraws this section instead of the whole page —
+# that's the "lentitud al cambiar de modo" fix. Falls back to a no-op
+# decorator on Streamlit versions that don't have fragments yet.
+_fragment_decorator = getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None)
+if _fragment_decorator is None:
+    def _fragment_decorator(func):
+        return func
 
-with st.expander("Ajustes avanzados"):
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        octave = st.slider("Octava", 0, 6, 3, help="Sube o baja la nota elegida arriba una o más octavas.")
-    with c2:
-        cell_ticks = st.select_slider("Tamaño", options=[60, 90, 120, 180, 240], value=120)
-    with c3:
-        gap = st.slider("Espacio", 0, 4, 1)
-    with c4:
-        lead_in = st.slider("Inicio", 0, 16, 4, help="Corre el dibujo más adelante en la línea de tiempo, para que no quede pegado al compás 1.")
 
-base_note = note_to_midi(root, octave)
-
-st.markdown(
-    render_piano_roll_html(label, label, weight=ctrl_weight, density=ctrl_density, width=ctrl_width, gap=gap),
-    unsafe_allow_html=True,
-)
-
-if st.button("Generar MIDI", type="primary"):
-    data = make_midi(
-        label, base_note, cell_ticks, gap, track_name=label, lead_in_cells=lead_in,
-        weight=ctrl_weight, density=ctrl_density, width=ctrl_width,
+@_fragment_decorator
+def style_and_preview_section(text, root, scale, label):
+    ctrl_weight = centered_style_picker(
+        "Grosor", "grosor", [("Tiny", "Fino"), ("Regular", "Regular"), ("Bold", "Grueso")], "Tiny"
     )
-    st.success("MIDI generado.")
-    st.download_button("⬇️ Descargar MIDI", data=data, file_name=safe_filename(label), mime="audio/midi")
+    ctrl_density = centered_style_picker(
+        "Densidad", "densidad", [("Loose", "Suelto"), ("Dense", "Denso")], "Dense"
+    )
+    ctrl_width = centered_style_picker(
+        "Ancho",
+        "ancho",
+        [("Narrow", "Angosto"), ("Medium", "Medio"), ("Wide", "Ancho"), ("Very Wide", "Muy ancho")],
+        "Narrow",
+    )
+
+    with st.expander("Ajustes avanzados"):
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            octave = st.slider("Octava", 0, 6, 3, help="Sube o baja la nota elegida arriba una o más octavas.")
+        with c2:
+            cell_ticks = st.select_slider("Tamaño", options=[60, 90, 120, 180, 240], value=120)
+        with c3:
+            gap = st.slider("Espacio", 0, 4, 1)
+        with c4:
+            lead_in = st.slider("Inicio", 0, 16, 4, help="Corre el dibujo más adelante en la línea de tiempo, para que no quede pegado al compás 1.")
+
+    base_note = note_to_midi(root, octave)
+
+    st.markdown(
+        render_piano_roll_html(label, label, weight=ctrl_weight, density=ctrl_density, width=ctrl_width, gap=gap),
+        unsafe_allow_html=True,
+    )
+
+    if st.button("Generar MIDI", type="primary"):
+        data = make_midi(
+            label, base_note, cell_ticks, gap, track_name=label, lead_in_cells=lead_in,
+            weight=ctrl_weight, density=ctrl_density, width=ctrl_width,
+        )
+        st.success("MIDI generado.")
+        st.download_button("⬇️ Descargar MIDI", data=data, file_name=safe_filename(label), mime="audio/midi")
+
+
+style_and_preview_section(text, root, scale, label)
 
 st.markdown(
     '<div class="t2m-footer">Creado por '
