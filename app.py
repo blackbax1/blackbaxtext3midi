@@ -492,6 +492,19 @@ st.markdown(
       font-size:15px !important;
       letter-spacing:.04em;
       padding:.55rem 1.3rem !important;
+      display:flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+      text-align:center !important;
+    }
+    div[data-testid="stSegmentedControl"] button > div{
+      justify-content:center !important;
+      width:100%;
+    }
+    div[data-testid="stSegmentedControl"] button p{
+      text-align:center !important;
+      width:100%;
+      margin:0 !important;
     }
     </style>
     """,
