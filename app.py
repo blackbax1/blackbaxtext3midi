@@ -433,34 +433,6 @@ st.markdown(
       .t2m-title{ animation:none; }
     }
 
-    /* Fallback pill styling for st.radio, used when st.segmented_control
-       isn't available in the installed Streamlit version. */
-    div[role="radiogroup"]{
-      display:flex;
-      flex-wrap:wrap;
-      justify-content:center;
-      gap:10px;
-      margin:0 auto .9rem auto;
-      width:fit-content;
-      max-width:100%;
-    }
-    div[role="radiogroup"] label{
-      background:var(--panel) !important;
-      border:1px solid var(--line) !important;
-      border-radius:999px !important;
-      padding:.5rem 1.3rem !important;
-      font-size:15px !important;
-      cursor:pointer;
-      transition:border-color .15s ease, background .15s ease;
-    }
-    div[role="radiogroup"] label:has(input:checked){
-      border-color:var(--violet) !important;
-      background:linear-gradient(135deg,rgba(139,92,246,.35),rgba(255,79,163,.25)) !important;
-    }
-    div[role="radiogroup"] label > div:first-child{
-      display:none !important;
-    }
-
     /* Centered heading above each style selector (Grosor / Densidad / Ancho). */
     .t2m-ctrl-label{
       font-family:'JetBrains Mono', monospace;
@@ -478,37 +450,63 @@ st.markdown(
       margin:1.1rem 0 .5rem 0;
     }
 
-    /* Pill-style buttons for the native segmented control. justify-content
-       alone only centers the buttons INSIDE the widget's own box — it does
-       nothing if that box itself is still stuck to the left. width:fit-content
-       + margin:auto centers the box itself within its column. */
-    div[data-testid="stSegmentedControl"]{
+    /* Unified segmented bar built from real st.button widgets (see
+       centered_style_picker in the Python code). st.segmented_control's
+       internal label markup is nested differently across Streamlit
+       versions and its text could not be reliably centered, so each
+       option is now a plain st.button — button text is centered by
+       Streamlit itself — joined edge-to-edge into a single bordered box
+       via the rules below. div[class*="st-key-segbar_"] matches every
+       st.container(key="segbar_...") regardless of its exact key suffix. */
+    div[class*="st-key-segbar_"]{
+      display:flex;
       width:fit-content;
       max-width:100%;
-      margin:0 auto;
+      margin:0 auto .9rem auto;
+      border:1px solid var(--line);
+      border-radius:999px;
+      overflow:hidden;
+      background:var(--panel);
+      backdrop-filter:blur(10px);
     }
-    div[data-testid="stSegmentedControl"] button{
+    div[class*="st-key-segbar_"] div[data-testid="stHorizontalBlock"]{
+      gap:0 !important;
+      width:100%;
+    }
+    div[class*="st-key-segbar_"] div[data-testid="column"]{
+      padding:0 !important;
+      min-width:0 !important;
+    }
+    div[class*="st-key-segbar_"] div[data-testid="stButton"]{
+      margin:0 !important;
+      width:100%;
+    }
+    div[class*="st-key-segbar_"] button{
       font-family:'JetBrains Mono', monospace !important;
       font-size:15px !important;
       letter-spacing:.04em;
       padding:.55rem 1.3rem !important;
-      display:flex !important;
-      align-items:center !important;
-      justify-content:center !important;
-      text-align:center !important;
-    }
-    /* The label text sits inside one or more wrapper divs whose exact
-       nesting varies by Streamlit version, and that wrapper is what was
-       still left-aligned. Force EVERY descendant (whatever tag/depth it
-       is) to behave as a full-width, centered flex box, so the text is
-       centered no matter how deep it's nested inside the button. */
-    div[data-testid="stSegmentedControl"] button *{
-      display:flex !important;
-      align-items:center !important;
-      justify-content:center !important;
-      text-align:center !important;
       width:100% !important;
-      margin:0 auto !important;
+      background:transparent !important;
+      border:none !important;
+      border-left:1px solid var(--line) !important;
+      border-radius:0 !important;
+      color:var(--muted) !important;
+      box-shadow:none !important;
+      transform:none !important;
+      transition:background .15s ease, color .15s ease;
+    }
+    div[class*="st-key-segbar_"] div[data-testid="column"]:first-child button{
+      border-left:none !important;
+    }
+    div[class*="st-key-segbar_"] button:hover{
+      color:var(--ink) !important;
+      transform:none !important;
+      box-shadow:none !important;
+    }
+    div[class*="st-key-segbar_"] button[kind="primary"]{
+      background:linear-gradient(135deg,rgba(139,92,246,.55),rgba(255,79,163,.4)) !important;
+      color:var(--ink) !important;
     }
     </style>
     """,
@@ -536,42 +534,51 @@ st.markdown(f'<div class="t2m-label">{label}</div>', unsafe_allow_html=True)
 # Style controls: how chunky the strokes look. Defaults (Tiny / Dense /
 # Narrow) reproduce the exact original look, so nothing changes unless
 # you pick something else.
-_has_segmented = hasattr(st, "segmented_control")
+def style_picker(state_key, options, default_internal):
+    """options: list of (internal_value, spanish_label). Renders one unified
+    pill bar built from real st.button widgets — one button per option,
+    joined edge-to-edge into a single box by the div[class*="st-key-segbar_"]
+    CSS above. st.button's own label is always centered by Streamlit, so
+    (unlike segmented_control/radio) there's no internal markup left to
+    fight. The current pick is tracked in st.session_state[state_key]."""
+    if state_key not in st.session_state:
+        st.session_state[state_key] = default_internal
+
+    with st.container(key=f"segbar_{state_key}"):
+        cols = st.columns(len(options))
+        for col, (internal, lbl) in zip(cols, options):
+            with col:
+                is_selected = st.session_state[state_key] == internal
+                clicked = st.button(
+                    lbl,
+                    key=f"segbtn_{state_key}_{internal}",
+                    type="primary" if is_selected else "secondary",
+                    use_container_width=True,
+                )
+                if clicked:
+                    st.session_state[state_key] = internal
+    return st.session_state[state_key]
 
 
-def style_picker(label_text, options, default_internal):
-    """options: list of (internal_value, spanish_label). Shows the Spanish
-    label but returns the internal value the rendering code understands."""
-    labels = [lbl for _, lbl in options]
-    internal_by_label = {lbl: internal for internal, lbl in options}
-    default_label = next(lbl for internal, lbl in options if internal == default_internal)
-    if _has_segmented:
-        picked = st.segmented_control(label_text, labels, default=default_label, label_visibility="collapsed")
-        picked = picked if picked else default_label
-    else:
-        picked = st.radio(label_text, labels, index=labels.index(default_label), horizontal=True, label_visibility="collapsed")
-    return internal_by_label[picked]
-
-
-def centered_style_picker(heading, label_text, options, default_internal):
-    """Renders the heading + pill selector inside a real (centered) Streamlit
+def centered_style_picker(heading, state_key, options, default_internal):
+    """Renders the heading + pill bar inside a real (centered) Streamlit
     column, so the row is actually centered on the page regardless of the
     installed Streamlit version's internal HTML — no CSS guesswork needed."""
     _, mid, _ = st.columns([1, 6, 1])
     with mid:
         st.markdown(f'<div class="t2m-ctrl-label">{heading}</div>', unsafe_allow_html=True)
-        return style_picker(label_text, options, default_internal)
+        return style_picker(state_key, options, default_internal)
 
 
 ctrl_weight = centered_style_picker(
-    "Grosor", "Grosor", [("Tiny", "Fino"), ("Regular", "Regular"), ("Bold", "Grueso")], "Tiny"
+    "Grosor", "grosor", [("Tiny", "Fino"), ("Regular", "Regular"), ("Bold", "Grueso")], "Tiny"
 )
 ctrl_density = centered_style_picker(
-    "Densidad", "Densidad", [("Loose", "Suelto"), ("Dense", "Denso")], "Dense"
+    "Densidad", "densidad", [("Loose", "Suelto"), ("Dense", "Denso")], "Dense"
 )
 ctrl_width = centered_style_picker(
     "Ancho",
-    "Ancho",
+    "ancho",
     [("Narrow", "Angosto"), ("Medium", "Medio"), ("Wide", "Ancho"), ("Very Wide", "Muy ancho")],
     "Narrow",
 )
