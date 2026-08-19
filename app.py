@@ -210,13 +210,13 @@ def render_piano_roll_html(text, label, weight="Tiny", density="Dense", width="N
 
     return f"""
     <div style="border:1px solid rgba(255,255,255,.09);border-radius:16px;overflow:hidden;
-                box-shadow:0 22px 46px -22px rgba(139,92,246,.5);margin:16px 0 4px 0;">
+                box-shadow:0 22px 46px -22px rgba(139,92,246,.5);margin:8px 0 0 0;">
       <div style="background:linear-gradient(100deg,#8b5cf6,#ff4fa3 65%,#2be6c4 130%);
-                  color:#0a0710;padding:9px 13px;font-family:'JetBrains Mono',monospace;
+                  color:#0a0710;padding:7px 12px;font-family:'JetBrains Mono',monospace;
                   font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;">
         {label}{trunc_note}
       </div>
-      <div style="position:relative;background:#0a0a0d;padding:14px;overflow-x:auto;">
+      <div style="position:relative;background:#0a0a0d;padding:10px;overflow-x:auto;">
         <div style="position:absolute;top:0;left:0;height:100%;width:26px;pointer-events:none;
                     background:linear-gradient(90deg,rgba(43,230,196,0),rgba(43,230,196,.16),rgba(43,230,196,0));
                     animation:t2m-scan 5.5s linear infinite;"></div>
@@ -267,7 +267,16 @@ st.markdown(
 
     section.main > div.block-container{
       max-width:760px;
-      padding-top:3rem;
+      padding-top:1.3rem;
+      padding-bottom:1.5rem;
+    }
+
+    /* Streamlit puts a fixed ~1rem gap between every top-level widget.
+       Tightening it (still generous enough to read) is what actually lets
+       the whole page — including the download button at the bottom —
+       fit on screen without scrolling past everything first. */
+    div[data-testid="stVerticalBlock"]{
+      gap:.6rem !important;
     }
 
     h1, h2, h3, .stMarkdown h1{
@@ -277,11 +286,11 @@ st.markdown(
 
     .t2m-eyebrow{
       font-family:'JetBrains Mono', monospace;
-      font-size:11px;
-      letter-spacing:.3em;
+      font-size:10px;
+      letter-spacing:.28em;
       text-transform:uppercase;
       color:var(--cyan);
-      margin-bottom:6px;
+      margin-bottom:4px;
       display:flex;
       align-items:center;
       gap:8px;
@@ -295,21 +304,21 @@ st.markdown(
     .t2m-title{
       font-family:'Space Grotesk', sans-serif;
       font-weight:800;
-      font-size:2.6rem;
+      font-size:1.9rem;
       background:linear-gradient(100deg,#fff 0%,var(--violet) 35%,var(--magenta) 60%,var(--cyan) 100%);
       background-size:220% 220%;
       -webkit-background-clip:text;
       background-clip:text;
       color:transparent;
-      margin:0 0 8px 0;
+      margin:0 0 4px 0;
       line-height:1.08;
       animation:t2m-drift 9s ease-in-out infinite;
     }
     .t2m-sub{
       font-family:'Inter', sans-serif;
       color:var(--muted);
-      font-size:.97rem;
-      margin-bottom:1.8rem;
+      font-size:.88rem;
+      margin-bottom:.6rem;
     }
 
     label, .stMarkdown, p, span, div{
@@ -361,7 +370,7 @@ st.markdown(
 
     .t2m-footer{
       text-align:center;
-      margin-top:2.6rem;
+      margin-top:1rem;
       font-family:'Inter', sans-serif;
       font-size:12px;
       color:var(--muted);
@@ -383,7 +392,7 @@ st.markdown(
       letter-spacing:.08em;
       text-transform:uppercase;
       font-size:13px !important;
-      padding:.6rem 1.6rem !important;
+      padding:.5rem 1.4rem !important;
       box-shadow:0 12px 30px -10px var(--glow) !important;
       transition:transform .15s ease, box-shadow .15s ease;
     }
@@ -402,7 +411,7 @@ st.markdown(
       letter-spacing:.08em;
       text-transform:uppercase;
       font-size:13px !important;
-      padding:.6rem 1.6rem !important;
+      padding:.5rem 1.4rem !important;
       box-shadow:0 12px 30px -10px rgba(43,230,196,.45) !important;
       transition:transform .15s ease;
     }
@@ -436,9 +445,9 @@ st.markdown(
     /* Centered heading above each style selector (Grosor / Densidad / Ancho). */
     .t2m-ctrl-label{
       font-family:'JetBrains Mono', monospace;
-      font-size:14px;
+      font-size:12px;
       font-weight:600;
-      letter-spacing:.14em;
+      letter-spacing:.13em;
       text-transform:uppercase;
       text-align:center;
       width:100%;
@@ -447,7 +456,7 @@ st.markdown(
       -webkit-background-clip:text;
       background-clip:text;
       color:transparent;
-      margin:1.1rem 0 .5rem 0;
+      margin:.3rem 0 .3rem 0;
     }
 
     /* Unified segmented bar built from real st.button widgets (see
@@ -462,7 +471,7 @@ st.markdown(
       display:flex;
       width:fit-content;
       max-width:100%;
-      margin:0 auto .9rem auto;
+      margin:0 auto;
       border:1px solid var(--line);
       border-radius:999px;
       overflow:hidden;
@@ -483,9 +492,9 @@ st.markdown(
     }
     div[class*="st-key-segbar_"] button{
       font-family:'JetBrains Mono', monospace !important;
-      font-size:12px !important;
+      font-size:11px !important;
       letter-spacing:.02em;
-      padding:.5rem .55rem !important;
+      padding:.4rem .45rem !important;
       width:100% !important;
       white-space:nowrap !important;
       overflow:visible !important;
