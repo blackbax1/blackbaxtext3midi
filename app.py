@@ -599,31 +599,33 @@ _STYLE_WIDGET_TEMPLATE = r"""
   let weight = __WEIGHT_JSON__;
   let density = __DENSITY_JSON__;
 
-  function layoutCells(text, weight, density, gap){
+  function layoutCells(text, density, gap){
+    // Base (unscaled) layout: one grid cell per font pixel, spaced only by
+    // density (row gaps). This intentionally does NOT explode into
+    // NxN blocks per weight — that's what made the "Bold" preview render
+    // ~14,000 tiny glowing DOM cells and effectively freeze/blank out.
+    // Weight instead just scales how BIG each of these cells is drawn (see
+    // renderPreview), so the preview stays cheap regardless of weight
+    // while still looking chunkier for Bold. The real MIDI file still uses
+    // true NxN note-blocks (that's server-side Python, a different code
+    // path, and it merges runs into long notes so it never explodes).
     const rowStep = DENSITY_ROW_STEP[density] || 1;
-    const scale = WEIGHT_SCALE[weight] || 1;
-    const scaledGap = gap * scale;
     const cells = new Set();
     let x = 0, maxRow = 0;
-    const spaceWidth = 6 * scale;
+    const spaceWidth = 6;
     const upper = text.toUpperCase();
     for (const ch of upper) {
-      if (ch === " ") { x += spaceWidth + scaledGap; continue; }
+      if (ch === " ") { x += spaceWidth + gap; continue; }
       const glyph = FONT[ch] || FONT["-"];
       const glyphCells = new Set();
       for (let row = 0; row < glyph.length; row++) {
         const bits = glyph[row];
         for (let col = 0; col < bits.length; col++) {
           if (bits[col] !== "1") continue;
-          const sr = row * rowStep * scale, sc = col * scale;
-          for (let dr = 0; dr < scale; dr++) {
-            for (let dc = 0; dc < scale; dc++) {
-              glyphCells.add((sr+dr) + "," + (sc+dc));
-            }
-          }
+          glyphCells.add((row * rowStep) + "," + col);
         }
       }
-      let glyphW = 5 * scale;
+      let glyphW = 5;
       if (glyphCells.size > 0) {
         let maxC = -Infinity;
         glyphCells.forEach(function(key){
@@ -638,15 +640,15 @@ _STYLE_WIDGET_TEMPLATE = r"""
         cells.add((x+sc) + "," + sr);
         if (sr > maxRow) maxRow = sr;
       });
-      x += glyphW + scaledGap;
+      x += glyphW + gap;
     }
-    return {cells: cells, totalCols: Math.max(x - scaledGap, 0), maxRow: maxRow};
+    return {cells: cells, totalCols: Math.max(x - gap, 0), maxRow: maxRow};
   }
 
-  function buildGrid(text, weight, density, gap){
+  function buildGrid(text, density, gap){
     const shown = text.toUpperCase().slice(0, 40);
     const truncated = text.length > 40;
-    const lay = layoutCells(shown, weight, density, gap);
+    const lay = layoutCells(shown, density, gap);
     const nCols = Math.floor(lay.totalCols) + 1;
     const cols = [];
     for (let i = 0; i < nCols; i++) cols.push(new Set());
@@ -660,10 +662,15 @@ _STYLE_WIDGET_TEMPLATE = r"""
   }
 
   function renderPreview(){
-    const grid = buildGrid(label, weight, density, gap);
+    const grid = buildGrid(label, density, gap);
+    const scale = WEIGHT_SCALE[weight] || 1;
     const nCols = Math.max(grid.cols.length, 1);
     const nRows = grid.maxRow + 1;
-    const cell = Math.max(4, Math.min(9, Math.floor(620 / nCols)));
+    // Size cells to fit ~620px at BASE resolution, then blow that size up
+    // by the weight scale so Bold reads as chunkier squares -- without
+    // adding a single extra DOM node (see layoutCells for why that matters).
+    const baseCell = Math.max(3, Math.min(9, Math.floor(620 / nCols)));
+    const cell = baseCell * scale;
     let rowsHtml = "";
     for (let row = 0; row < nRows; row++) {
       const zebra = (row % 2 === 0) ? "background:rgba(255,255,255,0.032);" : "";
