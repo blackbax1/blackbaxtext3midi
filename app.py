@@ -1,5 +1,7 @@
 import io
+import json
 import streamlit as st
+import streamlit.components.v1 as components
 import mido
 
 # 5x7 bitmap font. Each character is a list of 7 rows, each row 5 bits.
@@ -452,100 +454,6 @@ st.markdown(
     @media (prefers-reduced-motion: reduce){
       .t2m-title{ animation:none; }
     }
-
-    /* Centered heading above each style selector (Grosor / Densidad). */
-    .t2m-ctrl-label{
-      font-family:'JetBrains Mono', monospace;
-      font-size:12px;
-      font-weight:600;
-      letter-spacing:.13em;
-      text-transform:uppercase;
-      text-align:center;
-      width:100%;
-      display:block;
-      background:linear-gradient(90deg,var(--violet),var(--cyan));
-      -webkit-background-clip:text;
-      background-clip:text;
-      color:transparent;
-      margin:.3rem 0 .3rem 0;
-    }
-
-    /* Unified segmented bar built from real st.button widgets (see
-       centered_style_picker in the Python code). st.segmented_control's
-       internal label markup is nested differently across Streamlit
-       versions and its text could not be reliably centered, so each
-       option is now a plain st.button — button text is centered by
-       Streamlit itself — joined edge-to-edge into a single bordered box
-       via the rules below. div[class*="st-key-segbar_"] matches every
-       st.container(key="segbar_...") regardless of its exact key suffix. */
-    div[class*="st-key-segbar_"]{
-      display:flex;
-      width:fit-content;
-      max-width:100%;
-      margin:0 auto;
-      border:1px solid var(--line);
-      border-radius:999px;
-      overflow:hidden;
-      background:var(--panel);
-      backdrop-filter:blur(10px);
-    }
-    /* Columns no longer split the bar into N equal-width slices — each
-       column now shrinks/grows to fit its own button label ("GRUESO"
-       needs more room than "FINO"), so the pill's overall width is the
-       sum of its labels instead of the longest label times N. */
-    div[class*="st-key-segbar_"] div[data-testid="stHorizontalBlock"]{
-      gap:0 !important;
-      width:auto !important;
-    }
-    div[class*="st-key-segbar_"] div[data-testid="column"]{
-      padding:0 !important;
-      flex:0 0 auto !important;
-      width:auto !important;
-      min-width:0 !important;
-    }
-    div[class*="st-key-segbar_"] div[data-testid="stButton"]{
-      margin:0 !important;
-      width:auto !important;
-    }
-    div[class*="st-key-segbar_"] button{
-      font-family:'JetBrains Mono', monospace !important;
-      font-size:11px !important;
-      letter-spacing:.02em;
-      padding:.5rem .95rem !important;
-      width:100% !important;
-      white-space:nowrap !important;
-      background:transparent !important;
-      border:none !important;
-      border-left:1px solid var(--line) !important;
-      border-radius:0 !important;
-      color:var(--muted) !important;
-      box-shadow:none !important;
-      transform:none !important;
-      transition:background .1s ease, color .1s ease;
-    }
-    /* On very narrow screens, shrink further rather than clip — the
-       button no longer refuses to shrink below its content (no
-       min-width:0 above), so this only kicks in if there's truly no
-       room, instead of being the thing that causes the clipping. */
-    @media (max-width:480px){
-      div[class*="st-key-segbar_"] button{
-        font-size:10px !important;
-        padding:.4rem .55rem !important;
-        letter-spacing:0;
-      }
-    }
-    div[class*="st-key-segbar_"] div[data-testid="column"]:first-child button{
-      border-left:none !important;
-    }
-    div[class*="st-key-segbar_"] button:hover{
-      color:var(--ink) !important;
-      transform:none !important;
-      box-shadow:none !important;
-    }
-    div[class*="st-key-segbar_"] button[kind="primary"]{
-      background:linear-gradient(135deg,rgba(139,92,246,.55),rgba(255,79,163,.4)) !important;
-      color:var(--ink) !important;
-    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -569,52 +477,245 @@ with k2:
 label = f"{root} {scale.lower()} - {text}"
 st.markdown(f'<div class="t2m-label">{label}</div>', unsafe_allow_html=True)
 
-# Style controls: how chunky the strokes look. Defaults (Tiny / Dense /
-# Narrow) reproduce the exact original look, so nothing changes unless
-# you pick something else.
-def style_picker(state_key, options, default_internal):
-    """options: list of (internal_value, spanish_label). Renders one unified
-    pill bar built from real st.button widgets — one button per option,
-    joined edge-to-edge into a single box by the div[class*="st-key-segbar_"]
-    CSS above. st.button's own label is always centered by Streamlit, so
-    (unlike segmented_control/radio) there's no internal markup left to
-    fight. The current pick is tracked in st.session_state[state_key]."""
-    if state_key not in st.session_state:
-        st.session_state[state_key] = default_internal
+# --- Client-side style widget -------------------------------------------
+# Grosor + Densidad + el preview en vivo viven ahora en un solo componente
+# HTML/JS (un iframe) que corre 100% en el navegador: el layout de letras,
+# el dibujo del grid y el resaltado de los botones no tocan el servidor en
+# absoluto al cambiar de estilo, así que no hay viaje de ida y vuelta que
+# esperar (eso es lo que causaba el retraso de varios segundos en
+# Streamlit Cloud). La única llamada real al servidor sigue siendo, como
+# antes, el botón "Generar MIDI" — porque ahí sí se necesita Python/mido
+# para construir el archivo.
+#
+# Cómo se entera Python de qué estilo eligió el usuario en el navegador:
+# el JS del widget guarda la elección en la URL (query params t2mw/t2md)
+# con history.replaceState — que NO dispara un rerun por sí solo. Cuando
+# el usuario finalmente hace clic en "Generar MIDI" (un st.button normal,
+# eso sí dispara un rerun), Python lee esos query params ya actualizados
+# desde st.query_params y los usa para generar el MIDI real.
+_STYLE_WIDGET_TEMPLATE = r"""
+<div id="t2m-root">
+  <style>
+    :root{
+      --violet:#8b5cf6; --magenta:#ff4fa3; --cyan:#2be6c4;
+      --glow:rgba(139,92,246,.35); --ink:#f3f1fb; --muted:#928fa3;
+      --line:rgba(255,255,255,.09); --panel:rgba(255,255,255,.045);
+    }
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
+    html, body{ background:transparent; margin:0; padding:0; }
+    #t2m-root{ font-family:'JetBrains Mono', monospace; color:var(--ink); }
+    .t2m-ctrl-label{
+      font-size:12px; font-weight:600; letter-spacing:.13em; text-transform:uppercase;
+      text-align:center; width:100%; display:block;
+      background:linear-gradient(90deg,var(--violet),var(--cyan));
+      -webkit-background-clip:text; background-clip:text; color:transparent;
+      margin:.3rem 0 .3rem 0;
+    }
+    .t2m-segbar{
+      display:flex; width:fit-content; max-width:100%; margin:0 auto 14px auto;
+      border:1px solid var(--line); border-radius:999px; overflow:hidden;
+      background:var(--panel); backdrop-filter:blur(10px);
+    }
+    .t2m-segbar button{
+      font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.02em;
+      padding:.5rem .95rem; white-space:nowrap; background:transparent; border:none;
+      border-left:1px solid var(--line); color:var(--muted); cursor:pointer;
+      transition:background .1s ease, color .1s ease;
+    }
+    .t2m-segbar button:first-child{ border-left:none; }
+    .t2m-segbar button:hover{ color:var(--ink); }
+    .t2m-segbar button:active{ background:rgba(139,92,246,.35); color:var(--ink); }
+    .t2m-segbar button.active{
+      background:linear-gradient(135deg,rgba(139,92,246,.55),rgba(255,79,163,.4));
+      color:var(--ink); font-weight:600;
+    }
+    @media (max-width:480px){
+      .t2m-segbar button{ font-size:10px; padding:.4rem .55rem; }
+    }
+    .t2m-preview-card{
+      border:1px solid rgba(255,255,255,.09); border-radius:16px; overflow:hidden;
+      box-shadow:0 22px 46px -22px rgba(139,92,246,.5); margin:8px 0 0 0;
+    }
+    .t2m-preview-header{
+      background:linear-gradient(100deg,#8b5cf6,#ff4fa3 65%,#2be6c4 130%);
+      color:#0a0710; padding:7px 12px; font-weight:700; font-size:12px;
+      letter-spacing:.1em; text-transform:uppercase;
+    }
+    .t2m-preview-body{ position:relative; background:#0a0a0d; padding:10px; overflow-x:auto; }
+    .t2m-row{ display:flex; line-height:0; }
+    .t2m-cell{ margin:1px; display:inline-block; border-radius:3px; }
+    .t2m-cell.on{
+      background:linear-gradient(160deg,#c9a3ff,#8b5cf6 45%,#ff4fa3 100%);
+      box-shadow:0 0 7px rgba(139,92,246,.75);
+    }
+    .t2m-cell.off{ background:rgba(255,255,255,.025); }
+    .t2m-trunc{ float:right; opacity:.6; font-size:10px; }
+  </style>
 
-    with st.container(key=f"segbar_{state_key}"):
-        cols = st.columns(len(options))
-        for col, (internal, lbl) in zip(cols, options):
-            with col:
-                is_selected = st.session_state[state_key] == internal
-                clicked = st.button(
-                    lbl,
-                    key=f"segbtn_{state_key}_{internal}",
-                    type="primary" if is_selected else "secondary",
-                    use_container_width=True,
-                )
-                if clicked:
-                    st.session_state[state_key] = internal
-    return st.session_state[state_key]
+  <div class="t2m-ctrl-label">Grosor</div>
+  <div class="t2m-segbar" id="t2m-weight-bar"></div>
+  <div class="t2m-ctrl-label">Densidad</div>
+  <div class="t2m-segbar" id="t2m-density-bar"></div>
+  <div id="t2m-preview"></div>
+</div>
+
+<script>
+(function(){
+  const FONT = __FONT_JSON__;
+  const WEIGHT_OFFSETS = {"Tiny": [], "Regular": [[0,1],[1,0]], "Bold": [[0,1],[1,0],[1,1]]};
+  const DENSITY_ROW_STEP = {"Dense": 1, "Loose": 2};
+  const WEIGHT_OPTIONS = [["Tiny","Fino"], ["Regular","Regular"], ["Bold","Grueso"]];
+  const DENSITY_OPTIONS = [["Loose","Suelto"], ["Dense","Denso"]];
+
+  const label = __LABEL_JSON__;
+  const gap = __GAP__;
+  let weight = __WEIGHT_JSON__;
+  let density = __DENSITY_JSON__;
+
+  function layoutCells(text, weight, density, gap){
+    const rowStep = DENSITY_ROW_STEP[density] || 1;
+    const dilate = WEIGHT_OFFSETS[weight] || [];
+    const cells = new Set();
+    let x = 0, maxRow = 0;
+    const spaceWidth = 6;
+    const upper = text.toUpperCase();
+    for (const ch of upper) {
+      if (ch === " ") { x += spaceWidth + gap; continue; }
+      const glyph = FONT[ch] || FONT["-"];
+      const glyphCells = new Set();
+      for (let row = 0; row < glyph.length; row++) {
+        const bits = glyph[row];
+        for (let col = 0; col < bits.length; col++) {
+          if (bits[col] !== "1") continue;
+          const sr = row * rowStep, sc = col;
+          glyphCells.add(sr + "," + sc);
+          for (const off of dilate) glyphCells.add((sr+off[0]) + "," + (sc+off[1]));
+        }
+      }
+      let glyphW = 5;
+      if (glyphCells.size > 0) {
+        let maxC = -Infinity;
+        glyphCells.forEach(function(key){
+          const c = parseInt(key.split(",")[1], 10);
+          if (c > maxC) maxC = c;
+        });
+        glyphW = maxC + 1;
+      }
+      glyphCells.forEach(function(key){
+        const parts = key.split(",");
+        const sr = parseInt(parts[0], 10), sc = parseInt(parts[1], 10);
+        cells.add((x+sc) + "," + sr);
+        if (sr > maxRow) maxRow = sr;
+      });
+      x += glyphW + gap;
+    }
+    return {cells: cells, totalCols: Math.max(x - gap, 0), maxRow: maxRow};
+  }
+
+  function buildGrid(text, weight, density, gap){
+    const shown = text.toUpperCase().slice(0, 40);
+    const truncated = text.length > 40;
+    const lay = layoutCells(shown, weight, density, gap);
+    const nCols = Math.floor(lay.totalCols) + 1;
+    const cols = [];
+    for (let i = 0; i < nCols; i++) cols.push(new Set());
+    lay.cells.forEach(function(key){
+      const parts = key.split(",");
+      const cx = parseInt(parts[0], 10), row = parseInt(parts[1], 10);
+      while (cols.length <= cx) cols.push(new Set());
+      cols[cx].add(row);
+    });
+    return {cols: cols, truncated: truncated, maxRow: lay.maxRow};
+  }
+
+  function renderPreview(){
+    const grid = buildGrid(label, weight, density, gap);
+    const nCols = Math.max(grid.cols.length, 1);
+    const nRows = grid.maxRow + 1;
+    const cell = Math.max(4, Math.min(9, Math.floor(620 / nCols)));
+    let rowsHtml = "";
+    for (let row = 0; row < nRows; row++) {
+      const zebra = (row % 2 === 0) ? "background:rgba(255,255,255,0.032);" : "";
+      let rowHtml = "";
+      for (let x = 0; x < nCols; x++) {
+        const on = grid.cols[x] && grid.cols[x].has(row);
+        rowHtml += '<span class="t2m-cell ' + (on ? 'on' : 'off') +
+          '" style="width:' + cell + 'px;height:' + cell + 'px;"></span>';
+      }
+      rowsHtml += '<div class="t2m-row" style="' + zebra + '">' + rowHtml + '</div>';
+    }
+    const truncNote = grid.truncated ? '<span class="t2m-trunc">preview truncado</span>' : '';
+    document.getElementById('t2m-preview').innerHTML =
+      '<div class="t2m-preview-card">' +
+      '<div class="t2m-preview-header">' + label + truncNote + '</div>' +
+      '<div class="t2m-preview-body">' + rowsHtml + '</div>' +
+      '</div>';
+    resizeFrame();
+  }
+
+  function syncToParent(){
+    try {
+      const url = new URL(window.parent.location.href);
+      url.searchParams.set('t2mw', weight);
+      url.searchParams.set('t2md', density);
+      window.parent.history.replaceState(null, '', url);
+    } catch (e) { /* cross-origin fallback: preview still updates locally */ }
+  }
+
+  function renderBar(containerId, options, current, onPick){
+    const el = document.getElementById(containerId);
+    el.innerHTML = "";
+    options.forEach(function(opt){
+      const internal = opt[0], lbl = opt[1];
+      const btn = document.createElement('button');
+      btn.textContent = lbl;
+      if (internal === current) btn.classList.add('active');
+      btn.addEventListener('click', function(){ onPick(internal); });
+      el.appendChild(btn);
+    });
+  }
+
+  function redrawBars(){
+    renderBar('t2m-weight-bar', WEIGHT_OPTIONS, weight, function(v){
+      weight = v; syncToParent(); redrawBars(); renderPreview();
+    });
+    renderBar('t2m-density-bar', DENSITY_OPTIONS, density, function(v){
+      density = v; syncToParent(); redrawBars(); renderPreview();
+    });
+  }
+
+  function resizeFrame(){
+    try {
+      const h = document.getElementById('t2m-root').scrollHeight + 16;
+      window.parent.postMessage({type: "streamlit:setFrameHeight", height: h}, "*");
+    } catch (e) { /* best effort */ }
+  }
+
+  redrawBars();
+  renderPreview();
+  window.addEventListener('resize', resizeFrame);
+})();
+</script>
+"""
 
 
-def centered_style_picker(heading, state_key, options, default_internal):
-    """Renders the heading + pill bar. Both self-center via CSS (the
-    heading is text-align:center;width:100%, the bar is width:fit-content;
-    margin:0 auto), so no wrapping st.columns is needed — which also frees
-    up the full page width for the bar instead of squeezing it into a
-    narrower middle column."""
-    st.markdown(f'<div class="t2m-ctrl-label">{heading}</div>', unsafe_allow_html=True)
-    return style_picker(state_key, options, default_internal)
+def render_style_widget(label, weight, density, gap):
+    html = (
+        _STYLE_WIDGET_TEMPLATE
+        .replace("__FONT_JSON__", json.dumps(FONT))
+        .replace("__LABEL_JSON__", json.dumps(label))
+        .replace("__GAP__", json.dumps(gap))
+        .replace("__WEIGHT_JSON__", json.dumps(weight))
+        .replace("__DENSITY_JSON__", json.dumps(density))
+    )
+    components.html(html, height=520, scrolling=False)
 
 
 # st.fragment (st.experimental_fragment on older Streamlit) lets a block
 # re-run and re-render on its own, without re-running the rest of the
-# script above it (title, text input, note/scale selects...). Wrapping the
-# style pickers + preview + generate/download button in one means clicking
-# a style option only redraws this section instead of the whole page —
-# that's the "lentitud al cambiar de modo" fix. Falls back to a no-op
-# decorator on Streamlit versions that don't have fragments yet.
+# script above it (title, text input, note/scale selects...). This still
+# matters for the "Ajustes avanzados" sliders and the "Generar MIDI"
+# button below, which do need a real server round-trip.
 _fragment_decorator = getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None)
 if _fragment_decorator is None:
     def _fragment_decorator(func):
@@ -623,16 +724,8 @@ if _fragment_decorator is None:
 
 @_fragment_decorator
 def style_and_preview_section(text, root, scale, label):
-    ctrl_weight = centered_style_picker(
-        "Grosor", "grosor", [("Tiny", "Fino"), ("Regular", "Regular"), ("Bold", "Grueso")], "Tiny"
-    )
-    ctrl_density = centered_style_picker(
-        "Densidad", "densidad", [("Loose", "Suelto"), ("Dense", "Denso")], "Dense"
-    )
-    # "Ancho" selector removed (kept only Grosor + Densidad, per request).
-    # Width stays fixed at the original "Narrow" spacing.
-    ctrl_width = "Narrow"
-
+    # Advanced settings come first now, so "gap" is known before we build
+    # the style widget below (which needs it for the live preview).
     with st.expander("Ajustes avanzados"):
         c1, c2, c3, c4 = st.columns(4)
         with c1:
@@ -646,10 +739,22 @@ def style_and_preview_section(text, root, scale, label):
 
     base_note = note_to_midi(root, octave)
 
-    st.markdown(
-        render_piano_roll_html(label, label, weight=ctrl_weight, density=ctrl_density, width=ctrl_width, gap=gap),
-        unsafe_allow_html=True,
-    )
+    # Pick up the weight/density the JS widget last wrote to the URL. Falls
+    # back to session_state (last known good value) and finally to the
+    # original defaults, so a first-ever load or a sync hiccup never
+    # crashes — it just uses "Fino"/"Denso" like before.
+    qp = st.query_params
+    qs_weight = qp.get("t2mw")
+    qs_density = qp.get("t2md")
+    if qs_weight in WEIGHT_OFFSETS:
+        st.session_state["grosor"] = qs_weight
+    if qs_density in DENSITY_ROW_STEP:
+        st.session_state["densidad"] = qs_density
+    ctrl_weight = st.session_state.get("grosor", "Tiny")
+    ctrl_density = st.session_state.get("densidad", "Dense")
+    ctrl_width = "Narrow"  # "Ancho" selector removed; width stays fixed.
+
+    render_style_widget(label, ctrl_weight, ctrl_density, gap)
 
     if st.button("Generar MIDI", type="primary"):
         data = make_midi(
