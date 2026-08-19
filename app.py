@@ -497,14 +497,18 @@ st.markdown(
       justify-content:center !important;
       text-align:center !important;
     }
-    div[data-testid="stSegmentedControl"] button > div{
+    /* The label text sits inside one or more wrapper divs whose exact
+       nesting varies by Streamlit version, and that wrapper is what was
+       still left-aligned. Force EVERY descendant (whatever tag/depth it
+       is) to behave as a full-width, centered flex box, so the text is
+       centered no matter how deep it's nested inside the button. */
+    div[data-testid="stSegmentedControl"] button *{
+      display:flex !important;
+      align-items:center !important;
       justify-content:center !important;
-      width:100%;
-    }
-    div[data-testid="stSegmentedControl"] button p{
       text-align:center !important;
-      width:100%;
-      margin:0 !important;
+      width:100% !important;
+      margin:0 auto !important;
     }
     </style>
     """,
