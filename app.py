@@ -46,29 +46,69 @@ FONT = {
 "#":["01010","01010","11111","01010","11111","01010","01010"],
 }
 
+# --- Style controls: weight (stroke thickness), density (row spacing),
+# width (column spacing). "Tiny" / "Dense" / "Narrow" reproduce the
+# original 1px-per-cell look exactly, so the default look never changes.
+WEIGHT_OFFSETS = {
+    "Tiny": [],
+    "Regular": [(0, 1), (1, 0)],
+    "Bold": [(0, 1), (1, 0), (1, 1)],
+}
+DENSITY_ROW_STEP = {"Dense": 1, "Loose": 2}
+WIDTH_COL_STEP = {"Narrow": 1, "Medium": 2, "Wide": 3, "Very Wide": 4}
 
-def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100, track_name="TEXT2MIDI", lead_in_cells=4):
+
+def layout_cells(text, weight="Tiny", density="Dense", width="Narrow", gap=1):
+    """Lay text out on a grid of 'on' (col, row) cells, applying the
+    weight/density/width style controls. Shared by make_midi (for the
+    real MIDI) and the on-screen preview, so they always match exactly."""
+    row_step = DENSITY_ROW_STEP.get(density, 1)
+    col_step = WIDTH_COL_STEP.get(width, 1)
+    dilate = WEIGHT_OFFSETS.get(weight, [])
+
+    cells = set()
+    x = 0
+    max_row = 0
+    space_width = 6 * col_step
+    for ch in text.upper():
+        if ch == " ":
+            x += space_width + gap
+            continue
+        glyph = FONT.get(ch, FONT["-"])
+        glyph_cells = set()
+        for row, bits in enumerate(glyph):
+            for col, bit in enumerate(bits):
+                if bit != "1":
+                    continue
+                sr, sc = row * row_step, col * col_step
+                glyph_cells.add((sr, sc))
+                for dr, dc in dilate:
+                    glyph_cells.add((sr + dr, sc + dc))
+        glyph_w = (max(c for _, c in glyph_cells) + 1) if glyph_cells else 5 * col_step
+        for sr, sc in glyph_cells:
+            cells.add((x + sc, sr))
+            max_row = max(max_row, sr)
+        x += glyph_w + gap
+
+    total_cols = max(x - gap, 0)
+    return cells, total_cols, max_row
+
+
+def make_midi(text, base_note=48, cell_ticks=120, gap=1, velocity=100, track_name="TEXT2MIDI", lead_in_cells=4,
+              weight="Tiny", density="Dense", width="Narrow"):
     mid = mido.MidiFile(ticks_per_beat=480)
     track = mido.MidiTrack()
     mid.tracks.append(track)
     track.append(mido.MetaMessage("track_name", name=track_name))
     track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120)))
 
-    x = lead_in_cells
+    cells, total_cols, max_row = layout_cells(text, weight=weight, density=density, width=width, gap=gap)
     starts = []  # (start_tick, note)
-    for ch in text.upper():
-        if ch == " ":
-            x += 6 + gap
-            continue
-        glyph = FONT.get(ch, FONT["-"])
-        for row, bits in enumerate(glyph):
-            for col, bit in enumerate(bits):
-                if bit == "1":
-                    # Row 0 is the highest pitch so the glyph is upright in piano roll.
-                    note = base_note + (6 - row)
-                    start = (x + col) * cell_ticks
-                    starts.append((start, note))
-        x += 5 + gap
+    for col, row in cells:
+        # Row 0 is the highest pitch so the glyph is upright in piano roll.
+        note = base_note + (max_row - row)
+        start = (lead_in_cells + col) * cell_ticks
+        starts.append((start, note))
 
     # Build every note_on / note_off as an ABSOLUTE-time event first, so that
     # all the notes belonging to the same column (a vertical stroke of a
@@ -121,35 +161,29 @@ def safe_filename(label):
     return f"{cleaned}.mid"
 
 
-def build_preview_grid(text, gap=1, max_chars=40):
-    """Lay the text out on the same 5x7 grid used by make_midi, for an
+def build_preview_grid(text, weight="Tiny", density="Dense", width="Narrow", gap=1, max_chars=40):
+    """Lay the text out on the same grid used by make_midi, for an
     on-screen preview that mirrors the real piano roll exactly."""
     shown = text.upper()[:max_chars]
     truncated = len(text) > max_chars
-    cols = []  # cols[x] = set of "on" rows at that column
-    x = 0
-    for ch in shown:
-        if ch == " ":
-            x += 6 + gap
-            continue
-        glyph = FONT.get(ch, FONT["-"])
-        for row, bits in enumerate(glyph):
-            for col, bit in enumerate(bits):
-                cx = x + col
-                while len(cols) <= cx:
-                    cols.append(set())
-                if bit == "1":
-                    cols[cx].add(row)
-        x += 5 + gap
-    return cols, truncated
+    cell_set, total_cols, max_row = layout_cells(shown, weight=weight, density=density, width=width, gap=gap)
+    cols = [set() for _ in range(int(total_cols) + 1)]  # cols[x] = set of "on" rows at that column
+    for x, row in cell_set:
+        while len(cols) <= x:
+            cols.append(set())
+        cols[x].add(row)
+    return cols, truncated, max_row
 
 
-def render_piano_roll_html(text, label, gap=1):
-    cols, truncated = build_preview_grid(text, gap=gap)
+def render_piano_roll_html(text, label, weight="Tiny", density="Dense", width="Narrow", gap=1):
+    cols, truncated, max_row = build_preview_grid(text, weight=weight, density=density, width=width, gap=gap)
     n_cols = max(len(cols), 1)
-    cell = 9  # px
+    n_rows = max_row + 1
+    # Shrink the cell a little when Wide/Bold/Loose make the grid much bigger,
+    # so the preview keeps fitting nicely instead of overflowing.
+    cell = max(4, min(9, int(620 / n_cols)))  # px
     rows_html = []
-    for row in range(7):
+    for row in range(n_rows):
         zebra = "background:rgba(255,255,255,0.032);" if row % 2 == 0 else ""
         cells = []
         for x in range(n_cols):
@@ -398,6 +432,35 @@ st.markdown(
     @media (prefers-reduced-motion: reduce){
       .t2m-title{ animation:none; }
     }
+
+    /* Fallback pill styling for st.radio, used when st.segmented_control
+       isn't available in the installed Streamlit version. */
+    div[role="radiogroup"]{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-bottom:.6rem;
+    }
+    div[role="radiogroup"] label{
+      background:var(--panel) !important;
+      border:1px solid var(--line) !important;
+      border-radius:999px !important;
+      padding:.35rem 1rem !important;
+      cursor:pointer;
+      transition:border-color .15s ease, background .15s ease;
+    }
+    div[role="radiogroup"] label:has(input:checked){
+      border-color:var(--violet) !important;
+      background:linear-gradient(135deg,rgba(139,92,246,.35),rgba(255,79,163,.25)) !important;
+    }
+    div[role="radiogroup"] label > div:first-child{
+      display:none !important;
+    }
+
+    div[data-testid="stSegmentedControl"] button{
+      font-family:'JetBrains Mono', monospace !important;
+      letter-spacing:.04em;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -421,6 +484,30 @@ with k2:
 label = f"{root} {scale.lower()} - {text}"
 st.markdown(f'<div class="t2m-label">{label}</div>', unsafe_allow_html=True)
 
+# Style controls: how chunky the strokes look. Defaults (Tiny / Dense /
+# Narrow) reproduce the exact original look, so nothing changes unless
+# you pick something else.
+_has_segmented = hasattr(st, "segmented_control")
+
+
+def style_picker(label_text, options, default):
+    if _has_segmented:
+        picked = st.segmented_control(
+            label_text, options, default=default, label_visibility="collapsed"
+        )
+        return picked if picked else default
+    return st.radio(label_text, options, index=options.index(default), horizontal=True, label_visibility="collapsed")
+
+
+st.markdown('<div class="t2m-label">Grosor</div>', unsafe_allow_html=True)
+ctrl_weight = style_picker("Grosor", ["Tiny", "Regular", "Bold"], "Tiny")
+
+st.markdown('<div class="t2m-label">Densidad</div>', unsafe_allow_html=True)
+ctrl_density = style_picker("Densidad", ["Loose", "Dense"], "Dense")
+
+st.markdown('<div class="t2m-label">Ancho</div>', unsafe_allow_html=True)
+ctrl_width = style_picker("Ancho", ["Narrow", "Medium", "Wide", "Very Wide"], "Narrow")
+
 with st.expander("Ajustes avanzados"):
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -434,10 +521,16 @@ with st.expander("Ajustes avanzados"):
 
 base_note = note_to_midi(root, octave)
 
-st.markdown(render_piano_roll_html(label, label, gap=gap), unsafe_allow_html=True)
+st.markdown(
+    render_piano_roll_html(label, label, weight=ctrl_weight, density=ctrl_density, width=ctrl_width, gap=gap),
+    unsafe_allow_html=True,
+)
 
 if st.button("Generar MIDI", type="primary"):
-    data = make_midi(label, base_note, cell_ticks, gap, track_name=label, lead_in_cells=lead_in)
+    data = make_midi(
+        label, base_note, cell_ticks, gap, track_name=label, lead_in_cells=lead_in,
+        weight=ctrl_weight, density=ctrl_density, width=ctrl_width,
+    )
     st.success("MIDI generado.")
     st.download_button("⬇️ Descargar MIDI", data=data, file_name=safe_filename(label), mime="audio/midi")
 
