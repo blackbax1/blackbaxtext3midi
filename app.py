@@ -467,6 +467,8 @@ st.markdown(
       letter-spacing:.14em;
       text-transform:uppercase;
       text-align:center;
+      width:100%;
+      display:block;
       background:linear-gradient(90deg,var(--violet),var(--cyan));
       -webkit-background-clip:text;
       background-clip:text;
@@ -475,7 +477,18 @@ st.markdown(
     }
 
     /* Center the segmented-control / radio pill rows and make the text a
-       touch larger for a more polished, professional feel. */
+       touch larger for a more polished, professional feel. Streamlit wraps
+       every widget in its own full-width container, so we center THAT
+       container (not just the inner flex row) — covers both old and new
+       Streamlit DOM naming. */
+    div[data-testid="stElementContainer"]:has(> div[data-testid="stSegmentedControl"]),
+    .element-container:has(> div[data-testid="stSegmentedControl"]),
+    div[data-testid="stElementContainer"]:has(> div[role="radiogroup"]),
+    .element-container:has(> div[role="radiogroup"]){
+      display:flex !important;
+      justify-content:center !important;
+      width:100% !important;
+    }
     div[data-testid="stSegmentedControl"]{
       display:flex;
       justify-content:center;
